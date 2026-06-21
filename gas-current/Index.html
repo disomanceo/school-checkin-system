@@ -428,7 +428,21 @@
         placeholder="PIN 4 หลัก"
         class="w-full p-4 rounded-2xl
         bg-white/20 text-white
-        placeholder-white/70 outline-none mb-5">
+        placeholder-white/70 outline-none mb-3">
+
+      <label
+        class="flex items-start gap-3 text-white/90 text-sm mb-5 select-none">
+        <input
+          id="remember-login"
+          type="checkbox"
+          class="mt-1 h-4 w-4 rounded border-white/40 bg-white/20">
+        <span>
+          จำเบอร์โทรและ PIN บนเครื่องนี้
+          <span class="block text-xs text-white/65 mt-0.5">
+            เหมาะสำหรับเครื่องส่วนตัวเท่านั้น
+          </span>
+        </span>
+      </label>
 
       <button
         onclick="login()"

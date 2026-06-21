@@ -5,6 +5,9 @@ let checkinInProgress = false;
 let croppedRegisterProfilePhoto = null;
 let croppedProfileDialogPhoto = null;
 let checkinClockTimer = null;
+const REMEMBER_LOGIN_KEY = 'rememberLogin';
+const REMEMBERED_PHONE_KEY = 'phone';
+const REMEMBERED_PIN_KEY = 'pin';
 
 function normalizePhoneInput(phone) {
 
@@ -122,6 +125,60 @@ function setLoginLoading(isLoading) {
 
   btn.disabled = isLoading;
   btn.innerHTML = isLoading ? 'กำลังเข้าสู่ระบบ...' : 'Login';
+}
+
+function shouldRememberLogin() {
+  const checkbox = document.getElementById('remember-login');
+
+  return !!(checkbox && checkbox.checked);
+}
+
+function saveRememberedLogin(phone, pin) {
+  if (!shouldRememberLogin()) {
+    localStorage.removeItem(REMEMBER_LOGIN_KEY);
+    localStorage.removeItem(REMEMBERED_PHONE_KEY);
+    localStorage.removeItem(REMEMBERED_PIN_KEY);
+    return;
+  }
+
+  localStorage.setItem(REMEMBER_LOGIN_KEY, 'true');
+  localStorage.setItem(REMEMBERED_PHONE_KEY, phone || '');
+  localStorage.setItem(REMEMBERED_PIN_KEY, pin || '');
+}
+
+function loadRememberedLogin() {
+  const phoneInput = document.getElementById('phone');
+  const pinInput = document.getElementById('pin');
+  const rememberInput = document.getElementById('remember-login');
+  const rememberLogin = localStorage.getItem(REMEMBER_LOGIN_KEY) === 'true';
+  const phone = localStorage.getItem(REMEMBERED_PHONE_KEY) || '';
+  const pin = rememberLogin ? localStorage.getItem(REMEMBERED_PIN_KEY) || '' : '';
+
+  if (phoneInput && phone) {
+    phoneInput.value = phone;
+  }
+
+  if (pinInput && pin) {
+    pinInput.value = pin;
+  }
+
+  if (rememberInput) {
+    rememberInput.checked = rememberLogin;
+  }
+}
+
+function clearSessionStorageButKeepRememberedLogin() {
+  const rememberLogin = localStorage.getItem(REMEMBER_LOGIN_KEY) === 'true';
+  const phone = localStorage.getItem(REMEMBERED_PHONE_KEY) || '';
+  const pin = localStorage.getItem(REMEMBERED_PIN_KEY) || '';
+
+  localStorage.clear();
+
+  if (rememberLogin) {
+    localStorage.setItem(REMEMBER_LOGIN_KEY, 'true');
+    localStorage.setItem(REMEMBERED_PHONE_KEY, phone);
+    localStorage.setItem(REMEMBERED_PIN_KEY, pin);
+  }
 }
 
 function showUserInfo() {
@@ -876,10 +933,7 @@ function login() {
 
         currentUser = res;
 
-        localStorage.setItem(
-          'phone',
-          currentUser.phone
-        );
+        saveRememberedLogin(currentUser.phone, pin);
 
         Swal.fire({
           icon: 'success',
@@ -1489,7 +1543,7 @@ function toggleMenu() {
 
 function logout() {
 
-  localStorage.clear();
+  clearSessionStorageButKeepRememberedLogin();
   currentUser = null;
 
   document.getElementById(
@@ -1503,6 +1557,8 @@ function logout() {
   document.getElementById(
     'login-section'
   ).classList.remove('hidden');
+
+  loadRememberedLogin();
 
   showCheckinButton();
 
@@ -1833,19 +1889,7 @@ function showRoleMenu() {
 
 window.onload = function() {
   loadPublicAppSettings();
-
-  const phone =
-    localStorage.getItem(
-      'phone'
-    );
-
-  if (phone) {
-    const phoneInput = document.getElementById('phone');
-
-    if (phoneInput) {
-      phoneInput.value = phone;
-    }
-  }
+  loadRememberedLogin();
 };
 
 </script>
