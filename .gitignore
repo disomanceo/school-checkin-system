@@ -1,0 +1,11 @@
+.DS_Store
+Thumbs.db
+*.log
+node_modules/
+dist/
+build/
+.npm-cache/
+.clasp-auth/
+.env
+.env.*
+!.env.example

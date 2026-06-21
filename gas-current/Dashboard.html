@@ -1,0 +1,2232 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    body {
+      background:
+        linear-gradient(180deg, #fff7ed 0%, #f8fafc 45%, #eef2f7 100%);
+    }
+
+    .top-bar {
+      background:
+        linear-gradient(135deg, #7f1d1d, #b91c1c 58%, #92400e);
+      border: 1px solid rgba(250,204,21,0.28);
+      box-shadow: 0 16px 38px rgba(127,29,29,0.2);
+    }
+
+    .nav-btn {
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-weight: 700;
+      transition: 0.16s ease;
+    }
+
+    .nav-btn-active {
+      background:
+        linear-gradient(135deg, #fef3c7, #facc15, #d97706);
+      color: #6f1010;
+      box-shadow: 0 8px 18px rgba(250,204,21,0.18);
+    }
+
+    .nav-btn-idle {
+      background: rgba(255,255,255,0.12);
+      color: #fff7ed;
+      border: 1px solid rgba(255,255,255,0.22);
+    }
+
+    .nav-btn-idle:hover {
+      background: rgba(255,255,255,0.18);
+    }
+
+    .refresh-btn {
+      background: rgba(250,204,21,0.16);
+      color: #fff7ed;
+      border: 1px solid rgba(250,204,21,0.34);
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-weight: 700;
+    }
+
+    .page-card {
+      background: rgba(255,255,255,0.96);
+      border: 1px solid rgba(148,163,184,0.22);
+      box-shadow: 0 12px 34px rgba(15,23,42,0.08);
+    }
+
+    .summary-card {
+      border: 1px solid rgba(148,163,184,0.22);
+      background: #ffffff;
+    }
+
+    .metric-card {
+      min-height: 82px;
+      box-shadow: 0 10px 24px rgba(15,23,42,0.08);
+    }
+
+    .compact-approval-card {
+      border: 1px solid rgba(245,158,11,0.26);
+      background:
+        linear-gradient(90deg, rgba(255,251,235,0.92), rgba(255,255,255,0.98));
+    }
+
+    .approval-card {
+      border: 1px solid rgba(245,158,11,0.28);
+      background:
+        linear-gradient(90deg, rgba(255,251,235,0.9), rgba(255,255,255,0.96));
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+
+    .badge-normal {
+      color: #047857;
+      background: #d1fae5;
+      border-color: #a7f3d0;
+    }
+
+    .badge-late {
+      color: #be123c;
+      background: #ffe4e6;
+      border-color: #fecdd3;
+    }
+
+    .badge-none {
+      color: #475569;
+      background: #f1f5f9;
+      border-color: #e2e8f0;
+    }
+
+    .badge-pending {
+      color: #92400e;
+      background: #fef3c7;
+      border-color: #fde68a;
+    }
+
+    .badge-approved {
+      color: #047857;
+      background: #d1fae5;
+      border-color: #a7f3d0;
+    }
+
+    .badge-rejected {
+      color: #be123c;
+      background: #ffe4e6;
+      border-color: #fecdd3;
+    }
+
+    .badge-unrequested {
+      color: #991b1b;
+      background: #fee2e2;
+      border-color: #fecaca;
+    }
+
+
+    .badge-leave {
+      color: #6d28d9;
+      background: #ede9fe;
+      border-color: #ddd6fe;
+    }
+
+    .badge-official-duty {
+      color: #0369a1;
+      background: #e0f2fe;
+      border-color: #bae6fd;
+    }
+
+    .report-row-leave {
+      background: #f5f3ff;
+    }
+
+    .report-row-official-duty {
+      background: #f0f9ff;
+    }
+    .report-row-late {
+      background: #fff1f2;
+    }
+
+    .report-row-pending {
+      background: #fffbeb;
+    }
+
+    .report-row-unrequested {
+      background: #fef2f2;
+    }
+
+
+    .absent-name-badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      border: 1px solid #fecaca;
+      background: #fee2e2;
+      color: #991b1b;
+      padding: 5px 12px;
+      font-size: 13px;
+      font-weight: 800;
+      box-shadow: 0 0 0 rgba(248,113,113,0);
+      animation: absentSoftGlow 2.8s ease-in-out infinite;
+    }
+
+    .absent-complete-badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      border: 1px solid #a7f3d0;
+      background: #d1fae5;
+      color: #047857;
+      padding: 5px 12px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    @keyframes absentSoftGlow {
+      0%, 100% {
+        box-shadow: 0 0 0 rgba(248,113,113,0.05);
+        transform: translateY(0);
+      }
+      50% {
+        box-shadow: 0 0 18px rgba(248,113,113,0.38);
+        transform: translateY(-1px);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .absent-name-badge {
+        animation: none;
+      }
+    }
+    .app-footer {
+      color: #374151;
+      font-size: 12px;
+      line-height: 1.45;
+      text-align: center;
+      opacity: 0.95;
+    }
+  </style>
+</head>
+
+<body class="p-4 md:p-6">
+  <div class="max-w-7xl mx-auto">
+    <div class="top-bar rounded-2xl p-4 md:p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
+      <div>
+        <h1 class="text-2xl md:text-3xl font-bold text-white">Dashboard ผู้บริหาร</h1>
+        <div class="text-sm text-yellow-100/90">ระบบลงเวลาปฏิบัติงาน</div>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <button onclick="showView('dashboard')" class="nav-btn nav-btn-active" data-view-btn="dashboard">
+          Dashboard
+        </button>
+        <button onclick="showView('history')" class="nav-btn nav-btn-idle" data-view-btn="history">
+          ประวัติการปฏิบัติงาน
+        </button>
+        <button onclick="showView('leave')" class="nav-btn nav-btn-idle" data-view-btn="leave">
+          การลา
+        </button>
+        <button onclick="showView('settings')" class="nav-btn nav-btn-idle" data-view-btn="settings">
+          ตั้งค่าระบบ
+        </button>
+        <button onclick="refreshCurrentView()" class="refresh-btn">
+          รีเฟรช
+        </button>
+      </div>
+    </div>
+
+    <section id="view-dashboard">
+      <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 mb-4">
+        <div class="metric-card rounded-xl p-3 text-white bg-gradient-to-br from-slate-700 to-slate-900">
+          <div class="text-xs opacity-85">บุคลากรทั้งหมด</div>
+          <div id="total-active" class="text-2xl font-bold leading-tight mt-1">0</div>
+        </div>
+
+        <div class="metric-card rounded-xl p-3 text-white bg-gradient-to-br from-emerald-500 to-emerald-700">
+          <div class="text-xs opacity-90">มาปฏิบัติงาน</div>
+          <div id="checked-in" class="text-2xl font-bold leading-tight mt-1">0</div>
+        </div>
+
+        <div class="metric-card rounded-xl p-3 text-white bg-gradient-to-br from-sky-500 to-cyan-700">
+          <div class="text-xs opacity-90">ไม่ต้องลงเวลา</div>
+          <div id="no-check-total" class="text-2xl font-bold leading-tight mt-1">0</div>
+        </div>
+
+        <div class="metric-card rounded-xl p-3 text-white bg-gradient-to-br from-slate-400 to-slate-600">
+          <div class="text-xs opacity-95">ยังไม่ลงเวลา</div>
+          <div id="absent" class="text-2xl font-bold leading-tight mt-1">0</div>
+        </div>
+
+        <div class="metric-card rounded-xl p-3 text-white bg-gradient-to-br from-teal-500 to-emerald-700">
+          <div class="text-xs opacity-90">มาปกติ</div>
+          <div id="normal" class="text-2xl font-bold leading-tight mt-1">0</div>
+        </div>
+
+        <div class="metric-card rounded-xl p-3 text-white bg-gradient-to-br from-rose-500 to-red-700">
+          <div class="text-xs opacity-90">มาสาย</div>
+          <div id="late" class="text-2xl font-bold leading-tight mt-1">0</div>
+        </div>
+
+        <div class="metric-card rounded-xl p-3 text-white bg-gradient-to-br from-amber-400 to-orange-600">
+          <div class="text-xs opacity-95">รออนุมัติ</div>
+          <div id="pending" class="text-2xl font-bold leading-tight mt-1">0</div>
+        </div>
+      </div>
+
+      <div class="page-card rounded-xl p-3 mb-4 border-l-4 border-amber-400">
+        <div class="flex flex-col md:flex-row md:items-center gap-2 md:justify-between">
+          <div>
+            <div class="font-bold text-slate-900">ยังไม่ลงเวลา</div>
+            <div class="text-xs text-slate-500">รายชื่อบุคลากร active ที่ยังไม่มีรายการลงเวลาวันนี้</div>
+          </div>
+          <div id="absent-count-pill" class="status-pill bg-amber-100 text-amber-800 self-start md:self-auto">0 คน</div>
+        </div>
+        <div id="absent-name-list" class="flex flex-wrap gap-2 mt-3 text-sm">
+          กำลังโหลด...
+        </div>
+      </div>
+
+
+      <div class="page-card rounded-xl p-3 mb-4 border-l-4 border-sky-400">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+          <div>
+            <div class="font-bold text-slate-900">ไม่ต้องลงเวลา</div>
+            <div class="text-xs text-slate-500">นับจากคำขอที่อนุมัติแล้วของวันนี้</div>
+          </div>
+          <div class="flex flex-wrap gap-2 text-sm">
+            <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-violet-800 font-semibold">
+              ลาป่วย <b id="sick-leave-count" class="ml-1">0</b> คน
+            </span>
+            <span class="inline-flex items-center rounded-full border border-fuchsia-200 bg-fuchsia-50 px-3 py-1 text-fuchsia-800 font-semibold">
+              ลากิจ <b id="personal-leave-count" class="ml-1">0</b> คน
+            </span>
+            <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-sky-800 font-semibold">
+              ไปราชการ <b id="official-duty-count" class="ml-1">0</b> คน
+            </span>
+          </div>
+        </div>
+        <div id="no-check-name-list" class="flex flex-wrap gap-2 mt-3 text-sm">
+          ไม่มีรายการ
+        </div>
+      </div>
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+        <section class="page-card rounded-xl p-4">
+          <div class="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 class="text-lg font-bold text-slate-900">คำขออนุญาตรออนุมัติ</h2>
+              <div class="text-xs text-slate-500">มาสาย ลา และไปราชการ ส่งคำขอได้โดยไม่ต้องตรวจ GPS</div>
+            </div>
+            <div id="permission-count" class="status-pill bg-amber-100 text-amber-800">0 รายการ</div>
+          </div>
+
+          <div id="pending-permission-list" class="space-y-3 mb-5">
+            กำลังโหลด...
+          </div>
+
+          <div class="border-t border-slate-100 pt-4 mb-4"></div>
+          <div class="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 class="text-lg font-bold text-slate-900">รายการรออนุมัติ</h2>
+              <div class="text-xs text-slate-500">ตรวจเหตุผลการมาสายและอัปเดตสถานะ</div>
+            </div>
+            <div id="pending-count" class="status-pill bg-amber-100 text-amber-800">0 รายการ</div>
+          </div>
+
+          <div id="pending-late-list" class="space-y-3">
+            กำลังโหลด...
+          </div>
+        </section>
+
+        <aside class="page-card rounded-xl p-4">
+          <div class="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <h2 class="text-lg font-bold text-slate-900">กราฟสถานะ</h2>
+              <div class="text-xs text-slate-500">ภาพรวมการอนุมัติและสถานะเวลา</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 text-sm mb-3">
+            <div class="bg-emerald-50 border border-emerald-100 rounded-xl p-3 min-h-20">
+              <div class="text-emerald-700 font-semibold">อนุมัติแล้ว</div>
+              <div id="approved" class="text-2xl font-bold text-emerald-800 leading-tight mt-1">0</div>
+            </div>
+            <div class="bg-rose-50 border border-rose-100 rounded-xl p-3 min-h-20">
+              <div class="text-rose-700 font-semibold">ไม่อนุมัติ</div>
+              <div id="rejected" class="text-2xl font-bold text-rose-800 leading-tight mt-1">0</div>
+            </div>
+          </div>
+
+          <div class="h-64 xl:h-72">
+            <canvas id="myChart"></canvas>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="view-history" class="hidden bg-white rounded-lg shadow p-4">
+      <div class="mb-4">
+        <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><h2 class="text-lg font-bold">ประวัติการปฏิบัติงาน</h2>
+          <div class="text-xs text-gray-500">แสดงผลวันละ 1 ตาราง เลือกวันที่และตัวกรองที่ต้องการ</div></div><button onclick="createMonthlyCombinedPdf()" class="bg-red-700 text-white px-4 py-2 rounded-lg text-sm whitespace-nowrap shadow-sm">PDF รวมเดือน</button></div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[160px_160px_minmax(140px,1fr)_minmax(140px,1fr)_300px] gap-2 items-end">
+          <label class="block">
+            <span class="text-xs text-gray-600">วันที่</span>
+            <input id="report-date" type="date" class="w-full border rounded-lg px-3 py-2 mt-1 text-sm">
+          </label>
+
+          <label class="block">
+            <span class="text-xs text-gray-600">เดือน PDF</span>
+            <input id="report-month" type="month" class="w-full border rounded-lg px-3 py-2 mt-1 text-sm">
+          </label>
+
+          <label class="block">
+            <span class="text-xs text-gray-600">ตำแหน่ง</span>
+            <select id="report-position" class="w-full border rounded-lg px-3 py-2 mt-1 text-sm">
+              <option value="">ทั้งหมด</option>
+            </select>
+          </label>
+
+          <label class="block">
+            <span class="text-xs text-gray-600">สถานะ</span>
+            <select id="report-status" class="w-full border rounded-lg px-3 py-2 mt-1 text-sm">
+              <option value="">ทั้งหมด</option>
+              <option value="normal">ปกติ</option>
+              <option value="late">มาสาย</option>
+              <option value="pending">รออนุมัติ</option>
+              <option value="approved">อนุมัติแล้ว</option>
+              <option value="rejected">ไม่อนุมัติ</option>
+              <option value="unrequested">มาสายโดยไม่ได้ขอ</option>
+              <option value="leave">ลา</option>
+              <option value="official_duty">ไปราชการ</option>
+            </select>
+          </label>
+
+          <div class="grid grid-cols-3 gap-2">
+            <button onclick="loadReport()" class="bg-slate-800 text-white px-3 py-2 rounded-lg text-sm whitespace-nowrap">
+              ค้นหา
+            </button>
+            <button onclick="exportReport()" class="bg-green-700 text-white px-3 py-2 rounded-lg text-sm whitespace-nowrap">
+              Export
+            </button>
+            <button onclick="createDailyPdf()" class="bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm whitespace-nowrap">
+              PDF
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2 mb-4 text-xs">
+        <div class="bg-gray-100 rounded-lg p-2.5">ทั้งหมด <b id="report-total" class="text-base">0</b></div>
+        <div class="bg-green-50 rounded-lg p-2.5">ปกติ <b id="report-normal" class="text-base">0</b></div>
+        <div class="bg-red-50 rounded-lg p-2.5">มาสาย <b id="report-late" class="text-base">0</b></div>
+        <div class="bg-amber-50 rounded-lg p-2.5">รออนุมัติ <b id="report-pending" class="text-base">0</b></div>
+        <div class="bg-emerald-50 rounded-lg p-2.5">อนุมัติแล้ว <b id="report-approved" class="text-base">0</b></div>
+        <div class="bg-rose-50 rounded-lg p-2.5">ไม่อนุมัติ <b id="report-rejected" class="text-base">0</b></div>
+        <div class="bg-violet-50 rounded-lg p-2.5">ลา <b id="report-leave" class="text-base">0</b></div>
+        <div class="bg-sky-50 rounded-lg p-2.5">ไปราชการ <b id="report-official-duty" class="text-base">0</b></div>
+      </div>
+
+      <div id="report-table" class="overflow-x-auto">
+        กำลังโหลด...
+      </div>
+    </section>
+
+    <section id="view-leave" class="hidden bg-white rounded-lg shadow p-4">
+      <div class="mb-4">
+        <h2 class="text-lg font-bold">การลา</h2>
+        <div class="text-xs text-gray-500">ค้นหาใบลา หลักฐาน และสถานะอนุมัติย้อนหลัง</div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[150px_150px_1fr_160px_160px_110px] gap-2 items-end mb-4">
+        <label class="block">
+          <span class="text-xs text-gray-600">เดือน</span>
+          <input id="leave-month" type="month" class="w-full border rounded-lg px-3 py-2 mt-1 text-sm">
+        </label>
+
+        <label class="block">
+          <span class="text-xs text-gray-600">ชื่อ</span>
+          <input id="leave-keyword" type="text" placeholder="ค้นหาชื่อ" class="w-full border rounded-lg px-3 py-2 mt-1 text-sm">
+        </label>
+
+        <label class="block">
+          <span class="text-xs text-gray-600">ประเภท</span>
+          <select id="leave-type" class="w-full border rounded-lg px-3 py-2 mt-1 text-sm">
+            <option value="">ทั้งหมด</option>
+            <option value="ลาป่วย">ลาป่วย</option>
+            <option value="ลากิจ">ลากิจ</option>
+          </select>
+        </label>
+
+        <label class="block">
+          <span class="text-xs text-gray-600">สถานะ</span>
+          <select id="leave-status" class="w-full border rounded-lg px-3 py-2 mt-1 text-sm">
+            <option value="">ทั้งหมด</option>
+            <option value="pending">รออนุมัติ</option>
+            <option value="approved">อนุมัติแล้ว</option>
+            <option value="rejected">ไม่อนุมัติ</option>
+          </select>
+        </label>
+
+        <button onclick="loadLeaveRequests()" class="bg-slate-800 text-white px-3 py-2 rounded-lg text-sm">
+          ค้นหา
+        </button>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2 mb-4 text-xs">
+        <div class="bg-gray-100 rounded-lg p-2.5">ทั้งหมด <b id="leave-summary-total" class="text-base">0</b></div>
+        <div class="bg-violet-50 rounded-lg p-2.5">ลาป่วย <b id="leave-summary-sick" class="text-base">0</b></div>
+        <div class="bg-fuchsia-50 rounded-lg p-2.5">ลากิจ <b id="leave-summary-personal" class="text-base">0</b></div>
+        <div class="bg-amber-50 rounded-lg p-2.5">รออนุมัติ <b id="leave-summary-pending" class="text-base">0</b></div>
+        <div class="bg-emerald-50 rounded-lg p-2.5">อนุมัติแล้ว <b id="leave-summary-approved" class="text-base">0</b></div>
+        <div class="bg-blue-50 rounded-lg p-2.5">มีหลักฐาน <b id="leave-summary-evidence" class="text-base">0</b></div>
+        <div class="bg-indigo-50 rounded-lg p-2.5">มี PDF <b id="leave-summary-pdf" class="text-base">0</b></div>
+      </div>
+
+      <div id="leave-table" class="overflow-x-auto">
+        กำลังโหลด...
+      </div>
+    </section>
+
+    <section id="view-settings" class="hidden bg-white rounded-lg shadow p-4">
+      <div class="mb-4">
+        <h2 class="text-xl font-bold">ตั้งค่าระบบ</h2>
+        <div class="text-sm text-gray-500">แก้ไขเวลาเริ่มงาน พิกัด รัศมี และเวลาออกอัตโนมัติตามตำแหน่ง</div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <label class="block md:col-span-2">
+          <span class="text-sm text-gray-600">ชื่อโรงเรียน</span>
+          <input id="setting-school-name" type="text" class="w-full border rounded-lg px-3 py-2 mt-1">
+        </label>
+
+        <label class="block md:col-span-2">
+          <span class="text-sm text-gray-600">โลโก้โรงเรียน</span>
+          <input
+            id="setting-school-logo-file"
+            type="file"
+            accept="image/*"
+            onchange="handleLogoUpload(event)"
+            class="w-full border rounded-lg px-3 py-2 mt-1 bg-white">
+        </label>
+
+        <label class="block">
+          <span class="text-sm text-gray-600">ขนาดโลโก้ (%)</span>
+          <input id="setting-logo-size" type="number" min="10" max="100" class="w-full border rounded-lg px-3 py-2 mt-1" onchange="updateLogoPreview()">
+        </label>
+
+        <label class="block">
+          <span class="text-sm text-gray-600">Version แอพ</span>
+          <input id="setting-app-version" type="text" class="w-full border rounded-lg px-3 py-2 mt-1" placeholder="1.0.67">
+        </label>
+
+        <div class="block">
+          <span class="text-sm text-gray-600">ตัวอย่างโลโก้</span>
+          <div class="border rounded-lg p-3 mt-1 min-h-24 flex items-center justify-center">
+            <img id="setting-logo-preview" src="" alt="ตัวอย่างโลโก้" class="hidden object-contain" style="max-width: 180px; height: auto;">
+            <span id="setting-logo-empty" class="text-sm text-gray-500">ยังไม่มีโลโก้</span>
+          </div>
+        </div>
+
+        <label class="block">
+          <span class="text-sm text-gray-600">เวลาเริ่มงาน</span>
+          <input id="setting-start-time" type="time" class="w-full border rounded-lg px-3 py-2 mt-1">
+        </label>
+
+        <label class="block">
+          <span class="text-sm text-gray-600">รัศมี (เมตร)</span>
+          <input id="setting-radius" type="number" class="w-full border rounded-lg px-3 py-2 mt-1">
+        </label>
+
+        <label class="block">
+          <span class="text-sm text-gray-600">Latitude</span>
+          <input id="setting-lat" type="text" class="w-full border rounded-lg px-3 py-2 mt-1">
+        </label>
+
+        <label class="block">
+          <span class="text-sm text-gray-600">Longitude</span>
+          <input id="setting-lng" type="text" class="w-full border rounded-lg px-3 py-2 mt-1">
+        </label>
+
+        <label class="block md:col-span-2">
+          <span class="text-sm text-gray-600">Template ใบลา (Google Docs ID)</span>
+          <input id="setting-leave-template-id" type="text" class="w-full border rounded-lg px-3 py-2 mt-1">
+        </label>
+
+        <label class="block">
+          <span class="text-sm text-gray-600">ปีการศึกษา</span>
+          <input id="setting-academic-year" type="text" inputmode="numeric" class="w-full border rounded-lg px-3 py-2 mt-1" placeholder="2569">
+        </label>
+
+        <label class="block">
+          <span class="text-sm text-gray-600">ภาคเรียนปัจจุบัน</span>
+          <select id="setting-current-term" class="w-full border rounded-lg px-3 py-2 mt-1">
+            <option value="1">ภาคเรียนที่ 1</option>
+            <option value="2">ภาคเรียนที่ 2</option>
+          </select>
+        </label>
+
+        <label class="block">
+          <span class="text-sm text-gray-600">วันเริ่มภาคเรียน</span>
+          <input id="setting-term-start-date" type="date" class="w-full border rounded-lg px-3 py-2 mt-1">
+        </label>
+
+        <label class="block">
+          <span class="text-sm text-gray-600">วันสิ้นสุดภาคเรียน</span>
+          <input id="setting-term-end-date" type="date" class="w-full border rounded-lg px-3 py-2 mt-1">
+        </label>
+
+        <label class="block">
+          <span class="text-sm text-gray-600">คำนำหน้าเลขที่ใบลา</span>
+          <input id="setting-leave-doc-prefix" type="text" class="w-full border rounded-lg px-3 py-2 mt-1" placeholder="ผอ">
+        </label>
+
+        <label class="block">
+          <span class="text-sm text-gray-600">เริ่มเลขที่ใบลา</span>
+          <input id="setting-leave-doc-start-no" type="number" min="1" class="w-full border rounded-lg px-3 py-2 mt-1" placeholder="1">
+        </label>
+      </div>
+
+      <div class="mt-5 max-w-xl">
+        <div class="font-semibold mb-2">เวลาออกอัตโนมัติ</div>
+        <div id="position-settings" class="space-y-2">
+          กำลังโหลด...
+        </div>
+      </div>
+
+      <button
+        id="save-settings-btn"
+        onclick="saveSettings()"
+        class="mt-5 bg-slate-800 text-white px-5 py-2 rounded-lg">
+        บันทึกการตั้งค่า
+      </button>
+
+      <div class="mt-8 border-t pt-5">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-3">
+          <div>
+            <h3 class="text-lg font-bold">เครื่องมือดูแลระบบ</h3>
+            <div class="text-sm text-gray-500">ตรวจระบบ ติดตั้ง PDF อัตโนมัติ และดูประวัติการสร้าง PDF</div>
+          </div>
+
+          <button onclick="loadPdfLogs()" class="bg-white border text-slate-700 px-4 py-2 rounded-lg">
+            รีเฟรช Log
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-7 gap-2 mb-4">
+          <button onclick="runAdminTool('check')" class="bg-slate-700 text-white px-4 py-2 rounded-lg">
+            ตรวจโครงชีต
+          </button>
+          <button onclick="runAdminTool('repair')" class="bg-amber-600 text-white px-4 py-2 rounded-lg">
+            ซ่อมหัวตาราง
+          </button>
+          <button onclick="runAdminTool('backfill')" class="bg-emerald-700 text-white px-4 py-2 rounded-lg">
+            เติม StatusCode
+          </button>
+          <button onclick="runAdminTool('trigger')" class="bg-indigo-700 text-white px-4 py-2 rounded-lg">
+            ติดตั้ง PDF 18:15
+          </button>
+          <button onclick="runAdminTool('lineMorning')" class="bg-sky-700 text-white px-4 py-2 rounded-lg">
+            LINE 08:00
+          </button>
+          <button onclick="runAdminTool('lineTomorrow')" class="bg-yellow-600 text-white px-4 py-2 rounded-lg">
+            LINE 16:30
+          </button>
+          <button onclick="runAdminTool('clear')" class="bg-red-700 text-white px-4 py-2 rounded-lg">
+            ล้างข้อมูลทดสอบ
+          </button>
+        </div>
+
+        <div id="admin-tool-result" class="text-sm mb-4 text-slate-600">
+          ยังไม่มีผลการทำงาน
+        </div>
+
+        <div>
+          <div class="font-semibold mb-2">PdfLogs ล่าสุด</div>
+          <div id="pdf-log-list" class="overflow-x-auto border rounded-lg p-3 text-sm text-gray-500">
+            ยังไม่ได้โหลดข้อมูล
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="app-footer mt-8 pb-2">
+      <div>พัฒนาโดย ผอ.สุธน พุทธรัตน์</div>
+      <div>ผู้อำนวยการโรงเรียนวัดไผ่มุ้ง</div>
+      <div>โทร. 065-6735732</div>
+      <div>Version <span id="footer-app-version">1.0.67</span></div>
+    </footer>
+  </div>
+
+<script>
+let chart;
+let approvalBusy = false;
+let positionSettings = [];
+let currentView = 'dashboard';
+let currentLogoData = '';
+let logoChanged = false;
+
+function showView(view) {
+  currentView = view;
+
+  ['dashboard', 'history', 'leave', 'settings'].forEach((name) => {
+    document.getElementById(`view-${name}`).classList.toggle('hidden', name !== view);
+    const btn = document.querySelector(`[data-view-btn="${name}"]`);
+    if (btn) {
+      btn.className = name === view
+        ? 'nav-btn nav-btn-active'
+        : 'nav-btn nav-btn-idle';
+    }
+  });
+
+  if (view === 'dashboard') {
+    loadDashboard();
+    loadPendingPermissionRequests();
+    loadPendingLateRequests();
+  }
+
+  if (view === 'history') {
+    loadSettings(false);
+    loadReport();
+  }
+
+  if (view === 'leave') {
+    setDefaultLeaveMonth();
+    loadLeaveRequests();
+  }
+
+  if (view === 'settings') {
+    loadSettings(true);
+    loadPdfLogs();
+  }
+}
+
+function refreshCurrentView() {
+  showView(currentView);
+}
+
+function setDefaultLeaveMonth() {
+  const input = document.getElementById('leave-month');
+
+  if (input && !input.value) {
+    input.value = new Date().toISOString().slice(0, 7);
+  }
+}
+
+function getLeaveFilters() {
+  return {
+    month: document.getElementById('leave-month').value,
+    keyword: document.getElementById('leave-keyword').value,
+    type: document.getElementById('leave-type').value,
+    status: document.getElementById('leave-status').value
+  };
+}
+
+function loadLeaveRequests() {
+  const el = document.getElementById('leave-table');
+
+  if (!el) {
+    return;
+  }
+
+  el.innerHTML = 'กำลังโหลด...';
+
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res.success) {
+        el.innerHTML = `<div class="text-red-600">${escapeHtml(res.message || 'โหลดข้อมูลการลาไม่สำเร็จ')}</div>`;
+        return;
+      }
+
+      renderLeaveSummary(res.summary || {});
+      renderLeaveRows(res.rows || []);
+    })
+    .withFailureHandler((err) => {
+      el.innerHTML = `<div class="text-red-600">โหลดข้อมูลการลาไม่สำเร็จ: ${escapeHtml(err.message || '')}</div>`;
+    })
+    .getLeaveRequests(getLeaveFilters());
+}
+
+function renderLeaveSummary(summary) {
+  document.getElementById('leave-summary-total').innerHTML = summary.total || 0;
+  document.getElementById('leave-summary-sick').innerHTML = summary.sickLeave || 0;
+  document.getElementById('leave-summary-personal').innerHTML = summary.personalLeave || 0;
+  document.getElementById('leave-summary-pending').innerHTML = summary.pending || 0;
+  document.getElementById('leave-summary-approved').innerHTML = summary.approved || 0;
+  document.getElementById('leave-summary-evidence').innerHTML = summary.evidence || 0;
+  document.getElementById('leave-summary-pdf').innerHTML = summary.pdf || 0;
+}
+
+function renderLeaveRows(rows) {
+  const el = document.getElementById('leave-table');
+
+  if (!rows.length) {
+    el.innerHTML = '<div class="border rounded-lg p-6 text-center text-gray-500">ไม่พบข้อมูลการลา</div>';
+    return;
+  }
+
+  el.innerHTML = `
+    <table class="min-w-full text-sm">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="text-left p-2">วันที่ลา</th>
+          <th class="text-left p-2">ชื่อ - นามสกุล</th>
+          <th class="text-left p-2">ประเภท</th>
+          <th class="text-left p-2">เลขที่</th>
+          <th class="text-left p-2">ครั้งที่</th>
+          <th class="text-left p-2">จำนวนวัน</th>
+          <th class="text-left p-2">สถานะ</th>
+          <th class="text-left p-2">เหตุผล</th>
+          <th class="text-left p-2">หลักฐาน</th>
+          <th class="text-left p-2">ใบลา PDF</th>
+          <th class="text-left p-2">ผู้อนุมัติ</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((row) => `
+          <tr class="border-b ${row.requestType === 'ลาป่วย' ? 'report-row-leave' : ''}">
+            <td class="p-2">${escapeHtml(formatLeaveDateRange(row))}</td>
+            <td class="p-2">
+              <div class="font-semibold">${escapeHtml(row.name)}</div>
+              <div class="text-xs text-slate-500">${escapeHtml(row.position || '-')}</div>
+            </td>
+            <td class="p-2">${buildTimeStatusBadge(row.requestType)}</td>
+            <td class="p-2 font-semibold text-slate-700">${escapeHtml(row.documentNo || '-')}</td>
+            <td class="p-2">
+              <div>${escapeHtml(row.leaveSequence || '-')}</div>
+              ${buildLeaveTermBadges(row)}
+            </td>
+            <td class="p-2">${escapeHtml(row.days || '-')}</td>
+            <td class="p-2">${buildApprovalStatusBadge(row.approvalStatus)}</td>
+            <td class="p-2 max-w-xs">${escapeHtml(row.reason || '-')}</td>
+            <td class="p-2">${buildFileLink(row.evidenceUrl, 'ดูหลักฐาน')}</td>
+            <td class="p-2">${buildFileLink(row.leavePdfUrl, 'ดูใบลา')}</td>
+            <td class="p-2">${escapeHtml(row.approver || '-')}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function formatLeaveDateRange(row) {
+  if (!row.endDate || row.endDate === row.startDate) {
+    return row.startDate || '-';
+  }
+
+  return `${row.startDate || '-'} ถึง ${row.endDate}`;
+}
+
+function buildLeaveTermBadges(row) {
+  if (!row.leaveTerm && !row.leaveTermCount && !row.leaveTermDays) {
+    return '';
+  }
+
+  const term = row.leaveTerm || '-';
+  const count = row.leaveTermCount || '-';
+  const days = row.leaveTermDays || '-';
+
+  return `
+    <div class="mt-1 flex flex-wrap gap-1 text-[11px]">
+      <span class="rounded-full bg-sky-50 text-sky-700 border border-sky-200 px-2 py-0.5">ภาค ${escapeHtml(term)}</span>
+      <span class="rounded-full bg-violet-50 text-violet-700 border border-violet-200 px-2 py-0.5">ครั้งที่ ${escapeHtml(count)}</span>
+      <span class="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5">สะสม ${escapeHtml(days)} วัน</span>
+    </div>
+  `;
+}
+
+function buildFileLink(url, label) {
+  if (!url) {
+    return '<span class="text-slate-400">-</span>';
+  }
+
+  return `<a href="${escapeAttribute(url)}" target="_blank" class="text-blue-700 underline font-semibold">${escapeHtml(label)}</a>`;
+}
+
+function loadDashboard() {
+  google.script.run
+    .withSuccessHandler((res) => {
+      document.getElementById('total-active').innerHTML = res.totalActive || 0;
+      document.getElementById('checked-in').innerHTML = res.checkedIn || 0;
+      document.getElementById('no-check-total').innerHTML = res.noCheckTotal || 0;
+      document.getElementById('absent').innerHTML = res.absent || 0;
+      document.getElementById('sick-leave-count').innerHTML = res.sickLeave || 0;
+      document.getElementById('personal-leave-count').innerHTML = res.personalLeave || 0;
+      document.getElementById('official-duty-count').innerHTML = res.officialDuty || 0;
+      renderNoCheckNames(res.sickLeaveNames || [], res.personalLeaveNames || [], res.officialDutyNames || []);
+      renderAbsentNames(res.absentNames || []);
+      document.getElementById('normal').innerHTML = res.normal || 0;
+      document.getElementById('late').innerHTML = res.late || 0;
+      document.getElementById('pending').innerHTML = res.pending || 0;
+      document.getElementById('approved').innerHTML = res.approved || 0;
+      document.getElementById('rejected').innerHTML = res.rejected || 0;
+      renderChart(res);
+    })
+    .withFailureHandler((err) => {
+      Swal.fire('ผิดพลาด', err.message || 'โหลด Dashboard ไม่สำเร็จ', 'error');
+    })
+    .getDashboardData();
+}
+
+function renderNoCheckNames(sickLeaveNames, personalLeaveNames, officialDutyNames) {
+  const el = document.getElementById('no-check-name-list');
+
+  if (!el) {
+    return;
+  }
+
+  const items = [];
+
+  sickLeaveNames.forEach((name) => {
+    items.push(`
+      <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-violet-800 font-semibold">
+        ลาป่วย: ${escapeHtml(name)}
+      </span>
+    `);
+  });
+
+  personalLeaveNames.forEach((name) => {
+    items.push(`
+      <span class="inline-flex items-center rounded-full border border-fuchsia-200 bg-fuchsia-50 px-3 py-1 text-fuchsia-800 font-semibold">
+        ลากิจ: ${escapeHtml(name)}
+      </span>
+    `);
+  });
+
+  officialDutyNames.forEach((name) => {
+    items.push(`
+      <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-sky-800 font-semibold">
+        ไปราชการ: ${escapeHtml(name)}
+      </span>
+    `);
+  });
+
+  if (!items.length) {
+    el.innerHTML = '<span class="text-slate-500 text-sm">ไม่มีรายการ</span>';
+    return;
+  }
+
+  el.innerHTML = items.join('');
+}
+function renderAbsentNames(names) {
+  const listEl = document.getElementById('absent-name-list');
+  const countEl = document.getElementById('absent-count-pill');
+
+  if (countEl) {
+    countEl.innerHTML = `${names.length} คน`;
+    countEl.className = names.length
+      ? 'status-pill bg-red-100 text-red-800 self-start md:self-auto'
+      : 'status-pill bg-emerald-100 text-emerald-800 self-start md:self-auto';
+  }
+
+  if (!listEl) {
+    return;
+  }
+
+  if (!names.length) {
+    listEl.innerHTML = '<span class="absent-complete-badge">ลงเวลาครบแล้ว</span>';
+    return;
+  }
+
+  listEl.innerHTML = names.map((name) => `
+    <span class="absent-name-badge">
+      ${escapeHtml(name)}
+    </span>
+  `).join('');
+}
+function renderChart(data) {
+  const ctx = document.getElementById('myChart');
+
+  if (chart) {
+    chart.destroy();
+  }
+
+  chart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['ปกติ', 'มาสาย', 'รออนุมัติ'],
+      datasets: [{
+        data: [data.normal || 0, data.late || 0, data.pending || 0],
+        backgroundColor: ['#10b981', '#f43f5e', '#f59e0b'],
+        borderColor: '#ffffff',
+        borderWidth: 4,
+        hoverOffset: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            boxWidth: 10,
+            boxHeight: 10,
+            usePointStyle: true,
+            padding: 14
+          }
+        }
+      },
+      cutout: '68%'
+    }
+  });
+}
+
+function loadPendingPermissionRequests() {
+  const el = document.getElementById('pending-permission-list');
+
+  if (!el) {
+    return;
+  }
+
+  el.innerHTML = 'กำลังโหลด...';
+
+  google.script.run
+    .withSuccessHandler((items) => renderPendingPermissionRequests(items || []))
+    .withFailureHandler((err) => {
+      el.innerHTML = `<div class="text-red-600">โหลดคำขออนุญาตไม่สำเร็จ: ${escapeHtml(err.message || '')}</div>`;
+    })
+    .getPendingPermissionRequests();
+}
+
+function renderPendingPermissionRequests(items) {
+  const el = document.getElementById('pending-permission-list');
+  const countEl = document.getElementById('permission-count');
+
+  if (countEl) {
+    countEl.innerHTML = `${items.length} รายการ`;
+  }
+
+  if (!items.length) {
+    el.innerHTML = `
+      <div class="text-slate-500 border border-dashed rounded-xl p-6 text-center bg-amber-50/40">
+        ไม่มีคำขออนุญาตรออนุมัติ
+      </div>
+    `;
+    return;
+  }
+
+  el.innerHTML = items.map((item) => `
+    <div class="compact-approval-card rounded-xl p-3 border-l-4 ${getPermissionBorderClass(item.requestType)}">
+      <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2 mb-1">
+            <div class="font-bold text-base text-slate-900">${escapeHtml(item.name)}</div>
+            ${buildPermissionTypeBadge(item.requestType)}
+            ${buildApprovalStatusBadge(item.approvalStatus || 'รออนุมัติ')}
+          </div>
+
+          <div class="flex flex-wrap gap-2 text-xs text-slate-600">
+            <span class="bg-white/80 border rounded-full px-2.5 py-1">${escapeHtml(item.position || '-')}</span>
+            <span class="bg-white/80 border rounded-full px-2.5 py-1">${escapeHtml(formatPermissionDateRange(item))}</span>
+            ${item.days ? `<span class="bg-white/80 border rounded-full px-2.5 py-1">${escapeHtml(item.days)} วัน</span>` : ''}
+            ${item.requestType === 'มาสาย'
+              ? `<span class="bg-white/80 border rounded-full px-2.5 py-1">คาดว่าจะถึง ${escapeHtml(item.expectedTime || '-')}</span>`
+              : ''}
+            ${item.evidenceUrl
+              ? `<a href="${escapeAttribute(item.evidenceUrl)}" target="_blank" class="bg-blue-50 border border-blue-200 text-blue-700 rounded-full px-2.5 py-1 font-semibold">ดูหลักฐาน</a>`
+              : ''}
+          </div>
+
+          <div class="mt-2 grid gap-2 text-sm">
+            <div class="rounded-lg bg-white/80 border p-2">
+              <div class="font-semibold text-slate-700 mb-0.5">เหตุผล</div>
+              <div class="text-slate-700 leading-relaxed">${escapeHtml(item.reason || '-')}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex gap-2 md:flex-col md:min-w-28">
+          <button id="perm-approve-${escapeHtml(item.requestId)}" onclick="approvePermission('${escapeJsString(item.requestId)}')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-semibold">
+            อนุมัติ
+          </button>
+          <button id="perm-reject-${escapeHtml(item.requestId)}" onclick="rejectPermission('${escapeJsString(item.requestId)}')" class="bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 px-3 py-2 rounded-lg text-sm font-semibold">
+            ไม่อนุมัติ
+          </button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+window.approvePermission = function(requestId) {
+  updatePermission(requestId, 'approve');
+};
+
+window.rejectPermission = function(requestId) {
+  updatePermission(requestId, 'reject');
+};
+
+function updatePermission(requestId, action) {
+  if (approvalBusy) return;
+
+  const isApprove = action === 'approve';
+
+  Swal.fire({
+    icon: isApprove ? 'question' : 'warning',
+    title: isApprove ? 'อนุมัติคำขอนี้?' : 'ไม่อนุมัติคำขอนี้?',
+    input: 'text',
+    inputLabel: 'หมายเหตุ',
+    showCancelButton: true,
+    confirmButtonText: isApprove ? 'อนุมัติ' : 'ไม่อนุมัติ',
+    cancelButtonText: 'ยกเลิก'
+  }).then((result) => {
+    if (!result.isConfirmed) return;
+
+    approvalBusy = true;
+    setPermissionButtons(requestId, true);
+
+    const runner = google.script.run
+      .withSuccessHandler((res) => {
+        approvalBusy = false;
+        setPermissionButtons(requestId, false);
+
+        if (!res.success) {
+          Swal.fire('ไม่สำเร็จ', res.message, 'error');
+          loadPendingPermissionRequests();
+          return;
+        }
+
+        const pdfLink = res.leavePdfUrl
+          ? `<br><a href="${escapeAttribute(res.leavePdfUrl)}" target="_blank" class="text-blue-700 underline">เปิดใบลา PDF</a>`
+          : '';
+        const pdfWarning = res.leavePdfMessage
+          ? `<br><span class="text-amber-700">สร้างใบลา PDF ไม่สำเร็จ: ${escapeHtml(res.leavePdfMessage)}</span>`
+          : '';
+
+        Swal.fire({
+          icon: 'success',
+          title: 'สำเร็จ',
+          html: `${escapeHtml(res.approvalStatus || '')} ${escapeHtml(res.approvalTime || '')}${pdfLink}${pdfWarning}`
+        })
+          .then(() => {
+            loadDashboard();
+            loadPendingPermissionRequests();
+          });
+      })
+      .withFailureHandler((err) => {
+        approvalBusy = false;
+        setPermissionButtons(requestId, false);
+        Swal.fire('ผิดพลาด', err.message || 'อัปเดตคำขอไม่สำเร็จ', 'error');
+      });
+
+    if (isApprove) {
+      runner.approvePermissionRequest(requestId, 'ผู้บริหาร', result.value || '-');
+    } else {
+      runner.rejectPermissionRequest(requestId, 'ผู้บริหาร', result.value || '-');
+    }
+  });
+}
+
+function setPermissionButtons(requestId, disabled) {
+  const approveBtn = document.getElementById(`perm-approve-${requestId}`);
+  const rejectBtn = document.getElementById(`perm-reject-${requestId}`);
+
+  if (approveBtn) {
+    approveBtn.disabled = disabled;
+    approveBtn.innerHTML = disabled ? 'กำลังบันทึก...' : 'อนุมัติ';
+  }
+
+  if (rejectBtn) {
+    rejectBtn.disabled = disabled;
+    rejectBtn.innerHTML = disabled ? 'กำลังบันทึก...' : 'ไม่อนุมัติ';
+  }
+}
+
+function formatPermissionDateRange(item) {
+  const start = item && item.requestDate ? item.requestDate : '-';
+  const end = item && item.endDate ? item.endDate : start;
+
+  if (!end || end === start || end === '-') {
+    return 'วันที่ ' + start;
+  }
+
+  return 'วันที่ ' + start + ' ถึง ' + end;
+}
+
+function escapeJsString(value) {
+  return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+function loadPendingLateRequests() {
+  document.getElementById('pending-late-list').innerHTML = 'กำลังโหลด...';
+
+  google.script.run
+    .withSuccessHandler((items) => renderPendingLateRequests(items || []))
+    .withFailureHandler((err) => {
+      document.getElementById('pending-late-list').innerHTML =
+        `<div class="text-red-600">โหลดรายการรออนุมัติไม่สำเร็จ: ${escapeHtml(err.message || '')}</div>`;
+    })
+    .getPendingLateRequests();
+}
+
+function renderPendingLateRequests(items) {
+  const el = document.getElementById('pending-late-list');
+  document.getElementById('pending-count').innerHTML = `${items.length} รายการ`;
+
+  if (!items.length) {
+    el.innerHTML = `
+      <div class="text-slate-500 border border-dashed rounded-xl p-8 text-center bg-slate-50">
+        ไม่มีรายการรออนุมัติ
+      </div>
+    `;
+    return;
+  }
+
+  el.innerHTML = items.map((item) => `
+    <div class="compact-approval-card rounded-xl p-3">
+      <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2 mb-1">
+            <div class="font-bold text-base text-slate-900">${escapeHtml(item.name)}</div>
+            ${buildTimeStatusBadge(item.timeStatus)}
+            ${buildApprovalStatusBadge(item.approvalStatus || 'รออนุมัติ')}
+          </div>
+
+          <div class="flex flex-wrap gap-2 text-xs text-slate-600">
+            <span class="bg-white/80 border rounded-full px-2.5 py-1">${escapeHtml(item.position || '-')}</span>
+            <span class="bg-white/80 border rounded-full px-2.5 py-1">${escapeHtml(item.date || '-')}</span>
+            <span class="bg-white/80 border rounded-full px-2.5 py-1">เวลาเข้า ${escapeHtml(item.checkinTime || '-')}</span>
+          </div>
+
+          <div class="mt-2 grid gap-2 text-sm">
+            <div class="rounded-lg bg-white/80 border p-2">
+              <div class="font-semibold text-slate-700 mb-0.5">เหตุผล</div>
+              <div class="text-slate-700 leading-relaxed">${escapeHtml(item.reason || '-')}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex gap-2 md:flex-col md:min-w-28">
+          <button id="approve-${item.rowNumber}" onclick="approveLate(${item.rowNumber})" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-semibold">
+            อนุมัติ
+          </button>
+          <button id="reject-${item.rowNumber}" onclick="rejectLate(${item.rowNumber})" class="bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 px-3 py-2 rounded-lg text-sm font-semibold">
+            ไม่อนุมัติ
+          </button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+window.approveLate = function(rowNumber) {
+  updateLate(rowNumber, 'approve');
+};
+
+window.rejectLate = function(rowNumber) {
+  updateLate(rowNumber, 'reject');
+};
+
+function updateLate(rowNumber, action) {
+  if (approvalBusy) return;
+
+  const isApprove = action === 'approve';
+
+  Swal.fire({
+    icon: isApprove ? 'question' : 'warning',
+    title: isApprove ? 'อนุมัติรายการนี้?' : 'ไม่อนุมัติรายการนี้?',
+    input: 'text',
+    inputLabel: 'หมายเหตุ',
+    showCancelButton: true,
+    confirmButtonText: isApprove ? 'อนุมัติ' : 'ไม่อนุมัติ',
+    cancelButtonText: 'ยกเลิก'
+  }).then((result) => {
+    if (!result.isConfirmed) return;
+
+    approvalBusy = true;
+    setApprovalButtons(rowNumber, true);
+
+    const runner = google.script.run
+      .withSuccessHandler((res) => {
+        approvalBusy = false;
+        setApprovalButtons(rowNumber, false);
+
+        if (!res.success) {
+          Swal.fire('ไม่สำเร็จ', res.message, 'error');
+          loadPendingLateRequests();
+          return;
+        }
+
+        Swal.fire('สำเร็จ', `${res.approvalStatus || ''} ${res.approvalTime || ''}`, 'success')
+          .then(() => {
+            loadDashboard();
+            loadPendingLateRequests();
+          });
+      })
+      .withFailureHandler((err) => {
+        approvalBusy = false;
+        setApprovalButtons(rowNumber, false);
+        Swal.fire('ผิดพลาด', err.message || 'อัปเดตสถานะไม่สำเร็จ', 'error');
+      });
+
+    if (isApprove) {
+      runner.approveLateRequest(rowNumber, 'ผู้บริหาร', result.value || '-');
+    } else {
+      runner.rejectLateRequest(rowNumber, 'ผู้บริหาร', result.value || '-');
+    }
+  });
+}
+
+function setApprovalButtons(rowNumber, disabled) {
+  const approveBtn = document.getElementById(`approve-${rowNumber}`);
+  const rejectBtn = document.getElementById(`reject-${rowNumber}`);
+
+  if (approveBtn) {
+    approveBtn.disabled = disabled;
+    approveBtn.innerHTML = disabled ? 'กำลังบันทึก...' : 'อนุมัติ';
+  }
+
+  if (rejectBtn) {
+    rejectBtn.disabled = disabled;
+    rejectBtn.innerHTML = disabled ? 'กำลังบันทึก...' : 'ไม่อนุมัติ';
+  }
+}
+
+function loadSettings(showErrors) {
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res.success) {
+        if (showErrors) Swal.fire('ผิดพลาด', res.message || 'โหลดการตั้งค่าไม่สำเร็จ', 'error');
+        return;
+      }
+
+      document.getElementById('setting-start-time').value = res.settings.START_TIME || '08:00';
+      document.getElementById('setting-school-name').value = res.settings.SCHOOL_NAME || '';
+      document.getElementById('setting-logo-size').value = res.settings.SCHOOL_LOGO_SIZE_PERCENT || '35';
+      document.getElementById('setting-app-version').value = res.settings.APP_VERSION || '1.0.67';
+      const footerVersion = document.getElementById('footer-app-version');
+      if (footerVersion) footerVersion.innerHTML = res.settings.APP_VERSION || '1.0.67';
+      document.getElementById('setting-radius').value = res.settings.ALLOW_RADIUS || '500';
+      document.getElementById('setting-lat').value = res.settings.SCHOOL_LAT || '';
+      document.getElementById('setting-lng').value = res.settings.SCHOOL_LNG || '';
+      document.getElementById('setting-leave-template-id').value = res.settings.LEAVE_TEMPLATE_DOC_ID || '';
+      document.getElementById('setting-academic-year').value = res.settings.ACADEMIC_YEAR || '2569';
+      document.getElementById('setting-current-term').value = res.settings.CURRENT_TERM || '1';
+      document.getElementById('setting-term-start-date').value = res.settings.TERM_START_DATE || '';
+      document.getElementById('setting-term-end-date').value = res.settings.TERM_END_DATE || '';
+      document.getElementById('setting-leave-doc-prefix').value = res.settings.LEAVE_DOC_PREFIX || 'ผอ';
+      document.getElementById('setting-leave-doc-start-no').value = res.settings.LEAVE_DOC_START_NO || '1';
+      currentLogoData = res.settings.SCHOOL_LOGO_DATA || '';
+      logoChanged = false;
+      updateLogoPreview();
+
+      positionSettings = res.positions || [];
+      renderPositionSettings();
+      renderReportPositionOptions();
+    })
+    .withFailureHandler((err) => {
+      if (showErrors) {
+        document.getElementById('position-settings').innerHTML =
+          `<div class="text-red-600">โหลดการตั้งค่าไม่สำเร็จ: ${escapeHtml(err.message || '')}</div>`;
+      }
+    })
+    .getSystemSettingsForUi();
+}
+
+function renderPositionSettings() {
+  const el = document.getElementById('position-settings');
+
+  if (!positionSettings.length) {
+    el.innerHTML = '<div class="text-gray-500">ยังไม่มีข้อมูลตำแหน่ง</div>';
+    return;
+  }
+
+  el.innerHTML = positionSettings.map((item, index) => `
+    <div class="grid grid-cols-[1fr_120px] gap-2 items-center">
+      <input data-position-index="${index}" data-field="position" value="${escapeAttribute(item.position)}" class="border rounded-lg px-3 py-2">
+      <input data-position-index="${index}" data-field="checkoutTime" type="time" value="${escapeAttribute(formatTimeText(item.checkoutTime))}" class="border rounded-lg px-3 py-2">
+    </div>
+  `).join('');
+}
+
+function collectPositionSettings() {
+  const next = positionSettings.map((item) => ({
+    position: item.position,
+    checkoutTime: formatTimeText(item.checkoutTime)
+  }));
+
+  document.querySelectorAll('[data-position-index]').forEach((input) => {
+    const index = Number(input.dataset.positionIndex);
+    const field = input.dataset.field;
+    if (next[index]) {
+      next[index][field] = field === 'checkoutTime'
+        ? formatTimeText(input.value)
+        : input.value;
+    }
+  });
+
+  return next;
+}
+
+function saveSettings() {
+  const btn = document.getElementById('save-settings-btn');
+  btn.disabled = true;
+  btn.innerHTML = 'กำลังบันทึก...';
+
+  const payload = {
+    settings: {
+      SCHOOL_NAME: document.getElementById('setting-school-name').value,
+      SCHOOL_LOGO_SIZE_PERCENT: document.getElementById('setting-logo-size').value,
+      APP_VERSION: document.getElementById('setting-app-version').value,
+      START_TIME: document.getElementById('setting-start-time').value,
+      ALLOW_RADIUS: document.getElementById('setting-radius').value,
+      SCHOOL_LAT: document.getElementById('setting-lat').value,
+      SCHOOL_LNG: document.getElementById('setting-lng').value,
+      LEAVE_TEMPLATE_DOC_ID: document.getElementById('setting-leave-template-id').value,
+      ACADEMIC_YEAR: document.getElementById('setting-academic-year').value,
+      CURRENT_TERM: document.getElementById('setting-current-term').value,
+      TERM_START_DATE: document.getElementById('setting-term-start-date').value,
+      TERM_END_DATE: document.getElementById('setting-term-end-date').value,
+      LEAVE_DOC_PREFIX: document.getElementById('setting-leave-doc-prefix').value,
+      LEAVE_DOC_START_NO: document.getElementById('setting-leave-doc-start-no').value
+    },
+    positions: collectPositionSettings()
+  };
+
+  if (logoChanged) {
+    if (currentLogoData.length > 49000) {
+      btn.disabled = false;
+      btn.innerHTML = 'บันทึกการตั้งค่า';
+      Swal.fire('ไฟล์โลโก้ใหญ่เกินไป', 'กรุณาเลือกรูปโลโก้ขนาดเล็กลง', 'warning');
+      return;
+    }
+
+    payload.settings.SCHOOL_LOGO_DATA = currentLogoData;
+  }
+
+  google.script.run
+    .withSuccessHandler((res) => {
+      btn.disabled = false;
+      btn.innerHTML = 'บันทึกการตั้งค่า';
+      if (!res.success) {
+        Swal.fire('ไม่สำเร็จ', res.message || 'บันทึกการตั้งค่าไม่สำเร็จ', 'error');
+        return;
+      }
+      Swal.fire('สำเร็จ', res.message, 'success');
+      logoChanged = false;
+      loadSettings(true);
+    })
+    .withFailureHandler((err) => {
+      btn.disabled = false;
+      btn.innerHTML = 'บันทึกการตั้งค่า';
+      Swal.fire('ผิดพลาด', err.message || 'บันทึกการตั้งค่าไม่สำเร็จ', 'error');
+    })
+    .saveSystemSettings(payload);
+}
+
+function handleLogoUpload(event) {
+  const file = event.target.files && event.target.files[0];
+
+  if (!file) {
+    return;
+  }
+
+  if (!file.type.startsWith('image/')) {
+    Swal.fire('ไม่สำเร็จ', 'กรุณาเลือกไฟล์รูปภาพเท่านั้น', 'error');
+    event.target.value = '';
+    return;
+  }
+
+  resizeLogoFile(file, function(dataUrl) {
+    if (!dataUrl) {
+      Swal.fire('ไม่สำเร็จ', 'ไม่สามารถอ่านไฟล์โลโก้ได้', 'error');
+      event.target.value = '';
+      return;
+    }
+
+    if (dataUrl.length > 49000) {
+      Swal.fire('ไฟล์โลโก้ใหญ่เกินไป', 'กรุณาเลือกรูปที่เล็กลง หรือใช้โลโก้พื้นหลังเรียบ', 'warning');
+      event.target.value = '';
+      return;
+    }
+
+    currentLogoData = dataUrl;
+    logoChanged = true;
+    updateLogoPreview();
+  });
+}
+
+function resizeLogoFile(file, callback) {
+  const reader = new FileReader();
+
+  reader.onload = function(e) {
+    const img = new Image();
+
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      const maxSize = 360;
+      const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      let quality = 0.82;
+      let dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+      while (dataUrl.length > 49000 && quality > 0.35) {
+        quality -= 0.08;
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+      }
+
+      callback(dataUrl);
+    };
+
+    img.onerror = function() {
+      callback('');
+    };
+
+    img.src = e.target.result;
+  };
+
+  reader.onerror = function() {
+    callback('');
+  };
+
+  reader.readAsDataURL(file);
+}
+
+function updateLogoPreview() {
+  const preview = document.getElementById('setting-logo-preview');
+  const empty = document.getElementById('setting-logo-empty');
+  const size = Number(document.getElementById('setting-logo-size').value || 35);
+
+  if (!preview || !empty) {
+    return;
+  }
+
+  if (currentLogoData) {
+    preview.src = currentLogoData;
+    preview.style.width = Math.max(10, Math.min(100, size)) + '%';
+    preview.classList.remove('hidden');
+    empty.classList.add('hidden');
+    return;
+  }
+
+  preview.classList.add('hidden');
+  empty.classList.remove('hidden');
+}
+
+function setDefaultReportDate() {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  document.getElementById('report-date').value = `${yyyy}-${mm}-${dd}`;
+
+  const monthEl = document.getElementById('report-month');
+
+  if (monthEl) {
+    monthEl.value = `${yyyy}-${mm}`;
+  }
+}
+
+function renderReportPositionOptions() {
+  const select = document.getElementById('report-position');
+  const current = select.value;
+  const options = ['<option value="">ทั้งหมด</option>'];
+
+  positionSettings.forEach((item) => {
+    options.push(`<option value="${escapeAttribute(item.position)}">${escapeHtml(item.position)}</option>`);
+  });
+
+  select.innerHTML = options.join('');
+  select.value = current;
+}
+
+function getReportFilters() {
+  return {
+    date: document.getElementById('report-date').value,
+    position: document.getElementById('report-position').value,
+    status: document.getElementById('report-status').value
+  };
+}
+
+function loadReport() {
+  document.getElementById('report-table').innerHTML = 'กำลังโหลด...';
+
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res.success) {
+        document.getElementById('report-table').innerHTML =
+          `<div class="text-red-600">${escapeHtml(res.message || 'โหลดรายงานไม่สำเร็จ')}</div>`;
+        return;
+      }
+
+      renderReportSummary(res.summary || {});
+      renderReportRows(res.rows || []);
+    })
+    .withFailureHandler((err) => {
+      document.getElementById('report-table').innerHTML =
+        `<div class="text-red-600">โหลดรายงานไม่สำเร็จ: ${escapeHtml(err.message || '')}</div>`;
+    })
+    .getAttendanceReport(getReportFilters());
+}
+
+function renderReportSummary(summary) {
+  document.getElementById('report-total').innerHTML = summary.total || 0;
+  document.getElementById('report-normal').innerHTML = summary.normal || 0;
+  document.getElementById('report-late').innerHTML = summary.late || 0;
+  document.getElementById('report-pending').innerHTML = summary.pending || 0;
+  document.getElementById('report-approved').innerHTML = summary.approved || 0;
+  document.getElementById('report-rejected').innerHTML = summary.rejected || 0;
+  document.getElementById('report-leave').innerHTML = summary.leave || 0;
+  document.getElementById('report-official-duty').innerHTML = summary.officialDuty || 0;
+}
+
+function renderReportRows(rows) {
+  const el = document.getElementById('report-table');
+
+  if (!rows.length) {
+    el.innerHTML = `<div class="border rounded-lg p-6 text-center text-gray-500">ไม่พบข้อมูลตามตัวกรอง</div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <table class="min-w-full text-sm">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="text-left p-2">วันที่</th>
+          <th class="text-left p-2">ชื่อ - นามสกุล</th>
+          <th class="text-left p-2">ตำแหน่ง</th>
+          <th class="text-left p-2">เวลาเข้า</th>
+          <th class="text-left p-2">เวลากลับ</th>
+          <th class="text-left p-2">สถานะเวลา</th>
+          <th class="text-left p-2">สถานะอนุมัติ</th>
+          <th class="text-left p-2">เหตุผล</th>
+          <th class="text-left p-2">ผู้อนุมัติ</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((row) => `
+          <tr class="border-b ${getReportRowClass(row)}">
+            <td class="p-2">${escapeHtml(row.date)}</td>
+            <td class="p-2">${escapeHtml(row.name)}</td>
+            <td class="p-2">${escapeHtml(row.position)}</td>
+            <td class="p-2">${escapeHtml(row.checkinTime)}</td>
+            <td class="p-2">${escapeHtml(formatTimeText(row.autoCheckoutTime))}</td>
+            <td class="p-2">${buildTimeStatusBadge(row.timeStatus)}</td>
+            <td class="p-2">${buildApprovalStatusBadge(row.approvalStatus)}</td>
+            <td class="p-2">${escapeHtml(row.reason)}</td>
+            <td class="p-2">${escapeHtml(row.approver)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function exportReport() {
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res.success) {
+        Swal.fire('ไม่สำเร็จ', res.message || 'Export ไม่สำเร็จ', 'error');
+        return;
+      }
+
+      const blob = new Blob([res.csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = res.filename || 'attendance_report.csv';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    })
+    .withFailureHandler((err) => {
+      Swal.fire('ผิดพลาด', err.message || 'Export ไม่สำเร็จ', 'error');
+    })
+    .exportAttendanceReportCsv(getReportFilters());
+}
+
+function createDailyPdf() {
+  Swal.fire({
+    icon: 'question',
+    title: 'สร้าง PDF รายวันนี้?',
+    text: document.getElementById('report-date').value || '',
+    showCancelButton: true,
+    confirmButtonText: 'สร้าง PDF',
+    cancelButtonText: 'ยกเลิก'
+  }).then((result) => {
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    Swal.fire({
+      title: 'กำลังสร้าง PDF...',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+
+    google.script.run
+      .withSuccessHandler((res) => {
+        if (!res.success) {
+          Swal.fire('ไม่สำเร็จ', res.message || 'สร้าง PDF ไม่สำเร็จ', 'error');
+          return;
+        }
+
+        Swal.fire({
+          icon: 'success',
+          title: 'สร้าง PDF สำเร็จ',
+          text: res.fileName || '',
+          showCancelButton: true,
+          confirmButtonText: 'เปิด PDF',
+          cancelButtonText: 'ปิด'
+        }).then((openResult) => {
+          if (openResult.isConfirmed && res.url) {
+            window.open(res.url, '_blank');
+          }
+        });
+      })
+      .withFailureHandler((err) => {
+        Swal.fire('ผิดพลาด', err.message || 'สร้าง PDF ไม่สำเร็จ', 'error');
+      })
+      .createDailyPdfReport(getReportFilters());
+  });
+}
+
+function createMonthlyPdf() {
+  const month = document.getElementById('report-month').value;
+
+  if (!month) {
+    Swal.fire('กรุณาเลือกเดือน', 'เลือกเดือนที่ต้องการสร้าง PDF ย้อนหลัง', 'warning');
+    return;
+  }
+
+  Swal.fire({
+    icon: 'warning',
+    title: 'สร้าง PDF ทั้งเดือน?',
+    text: month,
+    showCancelButton: true,
+    confirmButtonText: 'เริ่มสร้าง',
+    cancelButtonText: 'ยกเลิก'
+  }).then((result) => {
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    Swal.fire({
+      title: 'กำลังสร้าง PDF ทั้งเดือน...',
+      text: 'อาจใช้เวลาหลายนาที กรุณารอสักครู่',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+
+    google.script.run
+      .withSuccessHandler((res) => {
+        if (!res.success) {
+          Swal.fire('ไม่สำเร็จ', res.message || 'สร้าง PDF รายเดือนไม่สำเร็จ', 'error');
+          return;
+        }
+
+        Swal.fire({
+          icon: 'success',
+          title: 'สร้าง PDF รายเดือนเรียบร้อย',
+          text: `สำเร็จ ${res.successCount || 0}/${res.total || 0} วัน`
+        });
+      })
+      .withFailureHandler((err) => {
+        Swal.fire('ผิดพลาด', err.message || 'สร้าง PDF รายเดือนไม่สำเร็จ', 'error');
+      })
+      .createMonthlyPdfReports({
+        month: month
+      });
+  });
+}
+
+function createMonthlyCombinedPdf() {
+  const month = document.getElementById('report-month').value;
+
+  if (!month) {
+    Swal.fire('กรุณาเลือกเดือน', 'เลือกเดือนที่ต้องการสร้าง PDF รวมเดือน', 'warning');
+    return;
+  }
+
+  Swal.fire({
+    icon: 'warning',
+    title: 'สร้าง PDF รวมเดือน?',
+    text: 'ระบบจะรวมเฉพาะวันที่มีข้อมูลลงเวลาจริงในเดือนที่เลือกเป็น PDF ไฟล์เดียว',
+    showCancelButton: true,
+    confirmButtonText: 'สร้างไฟล์รวม',
+    cancelButtonText: 'ยกเลิก'
+  }).then((result) => {
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    Swal.fire({
+      title: 'กำลังสร้าง PDF รวมเดือน...',
+      text: 'อาจใช้เวลาหลายนาที กรุณารอสักครู่',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+
+    google.script.run
+      .withSuccessHandler((res) => {
+        if (!res.success) {
+          Swal.fire('ไม่สำเร็จ', res.message || 'สร้าง PDF รวมเดือนไม่สำเร็จ', 'error');
+          return;
+        }
+
+        Swal.fire({
+          icon: 'success',
+          title: 'สร้าง PDF รวมเดือนสำเร็จ',
+          text: `${res.fileName || ''} (${res.pageCount || 0} หน้า)`,
+          showCancelButton: true,
+          confirmButtonText: 'เปิด PDF',
+          cancelButtonText: 'ปิด'
+        }).then((openResult) => {
+          if (openResult.isConfirmed && res.url) {
+            window.open(res.url, '_blank');
+          }
+        });
+
+        loadPdfLogs();
+      })
+      .withFailureHandler((err) => {
+        Swal.fire('ผิดพลาด', err.message || 'สร้าง PDF รวมเดือนไม่สำเร็จ', 'error');
+      })
+      .createMonthlyCombinedPdfReport({
+        month: month
+      });
+  });
+}
+
+function runAdminTool(action) {
+  const resultEl = document.getElementById('admin-tool-result');
+  const labels = {
+    check: 'ตรวจโครงชีต',
+    repair: 'ซ่อมหัวตาราง',
+    backfill: 'เติม StatusCode',
+    trigger: 'ติดตั้ง PDF อัตโนมัติ',
+    lineMorning: 'ติดตั้ง LINE แจ้งเตือน 08:00',
+    clear: 'ล้างข้อมูลทดสอบ'
+  };
+
+  const label = labels[action] || 'ทำงาน';
+
+  const run = () => {
+    resultEl.innerHTML = `กำลัง${label}...`;
+
+    const runner = google.script.run
+      .withSuccessHandler((res) => {
+        renderAdminToolResult(action, res);
+
+        if (action === 'trigger' || action === 'lineMorning' || action === 'backfill' || action === 'clear') {
+          loadPdfLogs();
+        }
+      })
+      .withFailureHandler((err) => {
+        resultEl.innerHTML = `<span class="text-red-600">ผิดพลาด: ${escapeHtml(err.message || '')}</span>`;
+      });
+
+    if (action === 'check') {
+      runner.checkSystemSheetStructure();
+      return;
+    }
+
+    if (action === 'repair') {
+      runner.repairSystemSheetHeaders();
+      return;
+    }
+
+    if (action === 'backfill') {
+      runner.backfillStatusCodes();
+      return;
+    }
+
+    if (action === 'trigger') {
+      runner.installDailyPdfTrigger();
+      return;
+    }
+
+    if (action === 'lineMorning') {
+      runner.installMorningLineTrigger();
+      return;
+    }
+
+    if (action === 'lineTomorrow') {
+      runner.installTomorrowPermissionLineTrigger();
+      return;
+    }
+
+    if (action === 'clear') {
+      runner.clearTestData();
+      return;
+    }
+  };
+
+  if (action === 'repair') {
+    Swal.fire({
+      icon: 'warning',
+      title: 'ซ่อมหัวตาราง?',
+      text: 'ระบบจะปรับหัวคอลัมน์แถวแรกให้ตรงกับโครงสร้างมาตรฐาน',
+      showCancelButton: true,
+      confirmButtonText: 'ดำเนินการ',
+      cancelButtonText: 'ยกเลิก'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        run();
+      }
+    });
+    return;
+  }
+
+  if (action === 'clear') {
+    Swal.fire({
+      icon: 'warning',
+      title: 'ล้างข้อมูลทดสอบ?',
+      html: 'ระบบจะล้างเฉพาะ <b>CheckinData</b> และ <b>PdfLogs</b> โดยคงหัวตารางไว้<br>ไม่ล้าง Users, Settings และ PositionSettings',
+      input: 'text',
+      inputPlaceholder: 'พิมพ์คำว่า ล้างข้อมูลทดสอบ เพื่อยืนยัน',
+      showCancelButton: true,
+      confirmButtonText: 'ล้างข้อมูล',
+      cancelButtonText: 'ยกเลิก',
+      confirmButtonColor: '#b91c1c',
+      inputValidator: (value) => {
+        if ((value || '').trim() !== 'ล้างข้อมูลทดสอบ') {
+          return 'กรุณาพิมพ์คำว่า ล้างข้อมูลทดสอบ ให้ถูกต้อง';
+        }
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        run();
+      }
+    });
+    return;
+  }
+  run();
+}
+
+function renderAdminToolResult(action, res) {
+  const resultEl = document.getElementById('admin-tool-result');
+
+  if (!res) {
+    resultEl.innerHTML = '<span class="text-red-600">ไม่พบผลลัพธ์จากระบบ</span>';
+    return;
+  }
+
+  if (action === 'check' || action === 'repair') {
+    const rows = (res.result || []).map((item) => `
+      <tr class="border-b">
+        <td class="p-2 font-semibold">${escapeHtml(item.sheet)}</td>
+        <td class="p-2">${item.ok ? '<span class="text-emerald-700">ผ่าน</span>' : '<span class="text-red-700">ต้องตรวจ</span>'}</td>
+        <td class="p-2">${escapeHtml(item.rows || 0)}</td>
+        <td class="p-2">${escapeHtml((item.issues || []).length)}</td>
+      </tr>
+    `).join('');
+
+    resultEl.innerHTML = `
+      <div class="border rounded-lg overflow-hidden">
+        <table class="min-w-full text-sm bg-white">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="text-left p-2">ชีต</th>
+              <th class="text-left p-2">ผล</th>
+              <th class="text-left p-2">แถว</th>
+              <th class="text-left p-2">จุดผิด</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+    return;
+  }
+
+  resultEl.innerHTML = `
+    <div class="rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-800 p-3">
+      ${escapeHtml(res.message || 'ดำเนินการเรียบร้อย')}
+      ${res.updated !== undefined ? `<br>อัปเดต ${escapeHtml(res.updated)} รายการ` : ''}
+    </div>
+  `;
+}
+
+function loadPdfLogs() {
+  const el = document.getElementById('pdf-log-list');
+
+  if (!el) {
+    return;
+  }
+
+  el.innerHTML = 'กำลังโหลด...';
+
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || !res.success) {
+        el.innerHTML = `<span class="text-red-600">${escapeHtml(res && res.message ? res.message : 'โหลด PdfLogs ไม่สำเร็จ')}</span>`;
+        return;
+      }
+
+      renderPdfLogs(res.rows || []);
+    })
+    .withFailureHandler((err) => {
+      el.innerHTML = `<span class="text-red-600">โหลด PdfLogs ไม่สำเร็จ: ${escapeHtml(err.message || '')}</span>`;
+    })
+    .getPdfLogs(10);
+}
+
+function renderPdfLogs(rows) {
+  const el = document.getElementById('pdf-log-list');
+
+  if (!rows.length) {
+    el.innerHTML = '<div class="text-gray-500">ยังไม่มีประวัติสร้าง PDF</div>';
+    return;
+  }
+
+  el.innerHTML = `
+    <table class="min-w-full text-sm bg-white">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="text-left p-2">วันที่</th>
+          <th class="text-left p-2">เวลา</th>
+          <th class="text-left p-2">สถานะ</th>
+          <th class="text-left p-2">ไฟล์</th>
+          <th class="text-left p-2">ข้อความ</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((row) => `
+          <tr class="border-b">
+            <td class="p-2">${escapeHtml(row.reportDate)}</td>
+            <td class="p-2">${escapeHtml(row.runTime)}</td>
+            <td class="p-2">${buildPdfLogStatusBadge(row.status)}</td>
+            <td class="p-2">
+              ${row.url ? `<a href="${escapeAttribute(row.url)}" target="_blank" class="text-indigo-700 underline">${escapeHtml(row.fileName || 'เปิดไฟล์')}</a>` : escapeHtml(row.fileName || '-')}
+            </td>
+            <td class="p-2">${escapeHtml(row.message)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function buildPdfLogStatusBadge(status) {
+  const text = String(status || '').trim();
+
+  if (text.includes('สำเร็จ') && !text.includes('ไม่สำเร็จ')) {
+    return `<span class="status-badge badge-approved">${escapeHtml(text)}</span>`;
+  }
+
+  if (text.includes('ไม่สำเร็จ') || text.includes('ผิดพลาด')) {
+    return `<span class="status-badge badge-rejected">${escapeHtml(text)}</span>`;
+  }
+
+  return `<span class="status-badge badge-none">${escapeHtml(text || '-')}</span>`;
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(value);
+}
+
+function cleanStatusText(value) {
+  return String(value || '')
+    .replace(/[🟢🔴🟡✅❌]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildTimeStatusBadge(value) {
+  const text = cleanStatusText(value);
+
+  if (!text) {
+    return '<span class="status-badge badge-none">-</span>';
+  }
+
+  if (text.includes('ไปราชการ')) {
+    return `<span class="status-badge badge-official-duty">${escapeHtml(text)}</span>`;
+  }
+
+  if (text.includes('ลา')) {
+    return `<span class="status-badge badge-leave">${escapeHtml(text)}</span>`;
+  }
+
+  if (text.includes('มาสาย')) {
+    return `<span class="status-badge badge-late">${escapeHtml(text)}</span>`;
+  }
+
+  if (text.includes('ปกติ')) {
+    return `<span class="status-badge badge-normal">${escapeHtml(text)}</span>`;
+  }
+
+  return `<span class="status-badge badge-none">${escapeHtml(text)}</span>`;
+}
+
+function buildApprovalStatusBadge(value) {
+  const text = cleanStatusText(value);
+
+  if (!text) {
+    return '<span class="status-badge badge-none">-</span>';
+  }
+
+  if (text.includes('มาสายโดยไม่ได้ขอ')) {
+    return `<span class="status-badge badge-unrequested">${escapeHtml(text)}</span>`;
+  }
+
+  if (text.includes('รออนุมัติ')) {
+    return `<span class="status-badge badge-pending">${escapeHtml(text)}</span>`;
+  }
+
+  if (text.includes('อนุมัติแล้ว')) {
+    return `<span class="status-badge badge-approved">${escapeHtml(text)}</span>`;
+  }
+
+  if (text.includes('ไม่อนุมัติ')) {
+    return `<span class="status-badge badge-rejected">${escapeHtml(text)}</span>`;
+  }
+
+  if (text.includes('ไม่ต้องอนุมัติ')) {
+    return '<span class="status-badge badge-none">-</span>';
+  }
+
+  return `<span class="status-badge badge-none">${escapeHtml(text)}</span>`;
+}
+
+function buildPermissionTypeBadge(value) {
+  const text = cleanStatusText(value);
+
+  if (text.includes('ไปราชการ')) {
+    return '<span class="status-badge badge-official-duty">ขอไปราชการ</span>';
+  }
+
+  if (text.includes('ลา')) {
+    return `<span class="status-badge badge-leave">ขอ${escapeHtml(text)}</span>`;
+  }
+
+  return '<span class="status-badge badge-pending">ขออนุญาตมาสาย</span>';
+}
+
+function getPermissionBorderClass(value) {
+  const text = cleanStatusText(value);
+
+  if (text.includes('ไปราชการ')) {
+    return 'border-sky-400';
+  }
+
+  if (text.includes('ลา')) {
+    return 'border-violet-400';
+  }
+
+  return 'border-amber-400';
+}
+
+function getReportRowClass(row) {
+  const timeStatus = cleanStatusText(row && row.timeStatus);
+  const approvalStatus = cleanStatusText(row && row.approvalStatus);
+
+  if (timeStatus.includes('ไปราชการ')) {
+    return 'report-row-official-duty';
+  }
+
+  if (timeStatus.includes('ลา')) {
+    return 'report-row-leave';
+  }
+
+  if (approvalStatus.includes('มาสายโดยไม่ได้ขอ')) {
+    return 'report-row-unrequested';
+  }
+
+  if (approvalStatus.includes('รออนุมัติ')) {
+    return 'report-row-pending';
+  }
+
+  if (timeStatus.includes('มาสาย')) {
+    return 'report-row-late';
+  }
+
+  return '';
+}
+
+function formatTimeText(value) {
+  const text = String(value || '').trim();
+
+  if (!text) {
+    return '';
+  }
+
+  const match = text.match(/^(\d{1,2})(?::|\.)(\d{1,2})$/);
+
+  if (match) {
+    let minute = match[2];
+
+    if (minute.length === 1) {
+      minute = minute + '0';
+    }
+
+    return String(Number(match[1])).padStart(2, '0') + ':' + minute.padStart(2, '0');
+  }
+
+  const hourOnly = text.match(/^(\d{1,2})$/);
+
+  if (hourOnly) {
+    return String(Number(hourOnly[1])).padStart(2, '0') + ':00';
+  }
+
+  return text;
+}
+
+function getInitialView() {
+  const params = new URLSearchParams(window.location.search);
+  const view = params.get('view');
+
+  if (view === 'history' || view === 'settings') {
+    return view;
+  }
+
+  if (view === 'leave') {
+    return view;
+  }
+
+  return 'dashboard';
+}
+
+setDefaultReportDate();
+loadSettings(false);
+showView(getInitialView());
+
+setInterval(() => {
+  if (currentView === 'dashboard') {
+    loadDashboard();
+    loadPendingPermissionRequests();
+    loadPendingLateRequests();
+  }
+}, 120000);
+</script>
+
+</body>
+</html>

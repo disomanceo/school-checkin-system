@@ -1,0 +1,1851 @@
+<script>
+
+let currentUser = null;
+let checkinInProgress = false;
+let croppedRegisterProfilePhoto = null;
+let croppedProfileDialogPhoto = null;
+let checkinClockTimer = null;
+
+function normalizePhoneInput(phone) {
+
+  return String(phone || '')
+    .trim()
+    .replace(/[^\d]/g, '');
+}
+
+function normalizePinInput(pin) {
+  return String(pin || '')
+    .trim()
+    .replace(/[^\d]/g, '')
+    .slice(0, 4);
+}
+
+function isValidPinInput(pin) {
+  return /^\d{4}$/.test(String(pin || '').trim());
+}
+
+function formatDisplayTime(res) {
+  return res.checkinTime || res.time || '';
+}
+
+function updateCheckinClock() {
+  const el = document.getElementById('checkin-clock-time');
+
+  if (!el) {
+    return;
+  }
+
+  const now = new Date();
+  const hour = String(now.getHours()).padStart(2, '0');
+  const minute = String(now.getMinutes()).padStart(2, '0');
+
+  el.innerHTML = hour + ':' + minute;
+}
+
+function startCheckinClock() {
+  updateCheckinClock();
+
+  if (checkinClockTimer) {
+    clearInterval(checkinClockTimer);
+  }
+
+  checkinClockTimer = setInterval(updateCheckinClock, 1000);
+}
+
+function showError(message) {
+
+  Swal.fire({
+    icon: 'error',
+    title: message || 'เกิดข้อผิดพลาด'
+  });
+}
+
+function escapeAttribute(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeHtml(value) {
+  return escapeAttribute(value);
+}
+
+function loadPublicAppSettings() {
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || !res.success) {
+        return;
+      }
+
+      const title = document.getElementById('login-title');
+      const brand = document.getElementById('school-brand');
+      const nameEl = document.getElementById('school-name');
+      const logoEl = document.getElementById('school-logo');
+
+      if (title && res.schoolName) {
+        title.innerHTML = 'ระบบลงเวลา';
+      }
+
+      const footerVersion = document.getElementById('login-footer-app-version');
+
+      if (footerVersion) {
+        footerVersion.innerHTML = res.appVersion || '1.0.67';
+      }
+
+      if (brand && nameEl) {
+        brand.classList.remove('hidden');
+        nameEl.innerHTML = res.schoolName || '';
+      }
+
+      const logoSource = res.schoolLogoData || res.schoolLogoUrl;
+      const logoSize = Number(res.schoolLogoSizePercent || 35);
+
+      if (logoEl && logoSource) {
+        logoEl.src = logoSource;
+        logoEl.style.width = Math.max(10, Math.min(100, logoSize)) + '%';
+        logoEl.classList.remove('hidden');
+      }
+    })
+    .withFailureHandler(() => {})
+    .getPublicAppSettings();
+}
+
+function setLoginLoading(isLoading) {
+  const btn = document.querySelector('button[onclick="login()"]');
+
+  if (!btn) {
+    return;
+  }
+
+  btn.disabled = isLoading;
+  btn.innerHTML = isLoading ? 'กำลังเข้าสู่ระบบ...' : 'Login';
+}
+
+function showUserInfo() {
+  if (!currentUser) {
+    return;
+  }
+
+  const el = document.getElementById('user-info');
+
+  if (!el) {
+    return;
+  }
+
+  const initial = String(currentUser.name || '?').trim().charAt(0) || '?';
+  const photo = currentUser.profilePhotoUrl
+    ? `<img src="${currentUser.profilePhotoUrl}" class="w-16 h-16 rounded-full object-cover mx-auto mb-3 border-2 border-yellow-200 shadow-lg">`
+    : `<div class="w-16 h-16 rounded-full mx-auto mb-3 border-2 border-yellow-200 bg-yellow-300 text-red-900 flex items-center justify-center text-2xl font-bold shadow-lg">${initial}</div>`;
+
+  el.innerHTML = `
+    ${photo}
+    <div class="font-bold">${currentUser.name}</div>
+    <div class="text-yellow-200 text-base">
+      ตำแหน่ง: ${currentUser.position || '-'}
+    </div>
+  `;
+}
+
+function resetCheckinButton(btn) {
+
+  if (!btn) {
+    return;
+  }
+
+  btn.style.display = '';
+  btn.disabled = false;
+  btn.innerHTML = 'เช็กอิน';
+}
+
+function hideCheckinButton() {
+  const btn = document.querySelector('button[onclick="checkin()"]');
+
+  if (btn) {
+    btn.style.display = 'none';
+    btn.disabled = true;
+  }
+}
+
+function showCheckinButton() {
+  const btn = document.querySelector('button[onclick="checkin()"]');
+
+  if (btn) {
+    btn.style.display = '';
+    btn.disabled = false;
+    btn.innerHTML = 'เช็กอิน';
+  }
+}
+
+function showAlreadyCheckedIn(res) {
+  hideCheckinButton();
+
+  document.querySelector('.status-card').innerHTML = `
+    ✅ วันนี้คุณได้ลงเวลาแล้ว
+    <br>
+    ${res.timeStatus || res.status || ''} ${res.time ? '(' + res.time + ')' : ''}
+    <br>
+    ${res.approvalStatus || ''}
+  `;
+}
+
+function applyTodayCheckinState(todayCheckin) {
+  if (todayCheckin && todayCheckin.checkedIn) {
+    showAlreadyCheckedIn(todayCheckin);
+    return;
+  }
+
+  showCheckinButton();
+
+  document.querySelector('.status-card').innerHTML = `
+    🟢 พร้อมลงเวลา
+  `;
+}
+
+function showRegister() {
+
+  document.getElementById(
+    'login-section'
+  ).classList.add('hidden');
+
+  document.getElementById(
+    'register-section'
+  ).classList.remove('hidden');
+}
+
+function showLogin() {
+
+  document.getElementById(
+    'register-section'
+  ).classList.add('hidden');
+
+  document.getElementById(
+    'login-section'
+  ).classList.remove('hidden');
+}
+
+function selectRegisterPosition(position) {
+  const input = document.getElementById('reg-position');
+
+  if (input) {
+    input.value = position;
+  }
+
+  document
+    .querySelectorAll('.reg-position-btn')
+    .forEach((btn) => {
+      const active = btn.getAttribute('data-position-option') === position;
+
+      btn.classList.toggle('bg-yellow-300', active);
+      btn.classList.toggle('text-red-900', active);
+      btn.classList.toggle('border-yellow-200', active);
+      btn.classList.toggle('shadow-lg', active);
+      btn.classList.toggle('bg-white/20', !active);
+      btn.classList.toggle('text-white', !active);
+      btn.classList.toggle('border-white/25', !active);
+    });
+}
+
+function registerUser() {
+
+  const name =
+    document.getElementById(
+      'reg-name'
+    ).value.trim();
+
+  const phone =
+    normalizePhoneInput(document.getElementById(
+      'reg-phone'
+    ).value);
+
+  const pin =
+    normalizePinInput(document.getElementById(
+      'reg-pin'
+    ).value);
+
+  const pinConfirm =
+    normalizePinInput(document.getElementById(
+      'reg-pin-confirm'
+    ).value);
+
+  const position =
+  document.getElementById(
+    'reg-position'
+  ).value;  
+
+  if (!name || !phone || !position) {
+
+    showError('กรุณากรอกชื่อ เบอร์โทร และตำแหน่ง');
+    return;
+  }
+
+  if (!isValidPinInput(pin)) {
+    showError('กรุณาตั้ง PIN เป็นตัวเลข 4 หลัก');
+    return;
+  }
+
+  if (pin !== pinConfirm) {
+    showError('PIN และยืนยัน PIN ไม่ตรงกัน');
+    return;
+  }
+
+  const profileFile = getOptionalRegisterFile('reg-profile-photo');
+  const signatureFile = getOptionalRegisterFile('reg-signature');
+
+  if ((profileFile && profileFile.size > 2 * 1024 * 1024) ||
+      (signatureFile && signatureFile.size > 2 * 1024 * 1024)) {
+    showError('รูปประจำตัวและลายเซ็นต้องมีขนาดไม่เกิน 2 MB ต่อไฟล์');
+    return;
+  }
+
+  Swal.fire({
+    title: 'กำลังสมัครสมาชิก...',
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading()
+  });
+
+  Promise
+    .all([
+      Promise.resolve(croppedRegisterProfilePhoto || null),
+      prepareSignatureAttachment(signatureFile)
+    ])
+    .then(([profilePhoto, signature]) => {
+      google.script.run
+
+        .withSuccessHandler((res) => {
+
+          if (!res.success) {
+
+            showError(res.message);
+            return;
+          }
+
+          Swal.fire({
+            icon: 'success',
+            title: res.message
+          });
+
+          showLogin();
+
+        })
+
+        .withFailureHandler((err) => {
+
+          showError(err.message || 'สมัครสมาชิกไม่สำเร็จ');
+
+        })
+
+        .registerUser({
+          name,
+          phone,
+          pin,
+          position,
+          profilePhoto,
+          signature
+        });
+    })
+    .catch((err) => {
+      showError(err.message || 'อ่านไฟล์ไม่สำเร็จ');
+    });
+}
+
+function getOptionalRegisterFile(id) {
+  const input = document.getElementById(id);
+
+  return input && input.files && input.files[0]
+    ? input.files[0]
+    : null;
+}
+
+function previewRegisterProfilePhoto() {
+  const file = getOptionalRegisterFile('reg-profile-photo');
+  const preview = document.getElementById('reg-profile-preview');
+  croppedRegisterProfilePhoto = null;
+
+  if (!file || !preview) {
+    if (preview) preview.classList.add('hidden');
+    return;
+  }
+
+  openProfilePhotoCropper(file)
+    .then((attachment) => {
+      if (!attachment) {
+        preview.classList.add('hidden');
+        return;
+      }
+
+      croppedRegisterProfilePhoto = attachment;
+      preview.src = attachment.data;
+      preview.classList.remove('hidden');
+    })
+    .catch((err) => showError(err.message || 'แสดงตัวอย่างรูปไม่สำเร็จ'));
+}
+
+function previewRegisterSignature() {
+  const file = getOptionalRegisterFile('reg-signature');
+  const preview = document.getElementById('reg-signature-preview');
+
+  if (!file || !preview) {
+    if (preview) preview.classList.add('hidden');
+    return;
+  }
+
+  prepareSignatureAttachment(file)
+    .then((attachment) => {
+      preview.src = attachment.data;
+      preview.classList.remove('hidden');
+    })
+    .catch((err) => showError(err.message || 'แสดงตัวอย่างลายเซ็นไม่สำเร็จ'));
+}
+
+function prepareProfilePhotoAttachment(file, position) {
+  if (!file) {
+    return Promise.resolve(null);
+  }
+
+  return loadImageFromFile(file).then((img) => {
+    const canvas = document.createElement('canvas');
+    const size = 180;
+    canvas.width = size;
+    canvas.height = size;
+
+    const ctx = canvas.getContext('2d');
+    const sourceSize = Math.min(img.width, img.height);
+    let sx = (img.width - sourceSize) / 2;
+    let sy = (img.height - sourceSize) / 2;
+    const offset = sourceSize * 0.18;
+
+    if (position === 'top') sy = Math.max(0, sy - offset);
+    if (position === 'bottom') sy = Math.min(img.height - sourceSize, sy + offset);
+    if (position === 'left') sx = Math.max(0, sx - offset);
+    if (position === 'right') sx = Math.min(img.width - sourceSize, sx + offset);
+
+    ctx.drawImage(img, sx, sy, sourceSize, sourceSize, 0, 0, size, size);
+
+    return {
+      name: makeProcessedFileName(file.name, 'profile', 'jpg'),
+      type: 'image/jpeg',
+      data: canvas.toDataURL('image/jpeg', 0.86)
+    };
+  });
+}
+
+function openProfilePhotoCropper(file) {
+  if (!file) {
+    return Promise.resolve(null);
+  }
+
+  return loadImageFromFile(file).then((img) => new Promise((resolve) => {
+    let zoom = Math.max(1, 260 / Math.min(img.width, img.height));
+    let offsetX = 0;
+    let offsetY = 0;
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.72);display:flex;align-items:center;justify-content:center;padding:16px;';
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:18px;padding:18px;width:min(94vw,420px);max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.35);text-align:center;">
+        <div style="font-weight:700;font-size:20px;margin-bottom:12px;">จัดตำแหน่งรูปประจำตัว</div>
+        <div style="font-size:13px;color:#475569;text-align:left;margin-bottom:8px;">ภาพรวมของรูปที่เลือก</div>
+        <img src="${img.src}" alt="ภาพรวม" style="width:100%;max-height:160px;object-fit:contain;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;margin-bottom:12px;">
+        <div style="font-size:13px;color:#475569;text-align:left;margin-bottom:8px;">กรอบที่จะใช้จริง</div>
+        <canvas id="profile-crop-canvas" width="260" height="260" style="width:260px;height:260px;max-width:100%;border-radius:14px;touch-action:none;background:#111827;"></canvas>
+        <label style="display:block;text-align:left;font-size:14px;color:#334155;margin-top:12px;">
+          ซูม
+          <input id="profile-crop-zoom" type="range" min="1" max="3" step="0.01" value="${zoom}" style="width:100%;margin-top:6px;">
+        </label>
+        <div style="font-size:12px;color:#64748b;margin:8px 0 14px;">ลากรูปเพื่อจัดใบหน้าให้อยู่กลางกรอบ</div>
+        <div style="display:flex;gap:8px;justify-content:center;">
+          <button id="profile-crop-cancel" type="button" style="border:1px solid #cbd5e1;background:white;color:#334155;border-radius:10px;padding:10px 16px;font-weight:700;">ยกเลิก</button>
+          <button id="profile-crop-confirm" type="button" style="border:0;background:#7c2d12;color:white;border-radius:10px;padding:10px 16px;font-weight:700;">ใช้รูปนี้</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const canvas = overlay.querySelector('#profile-crop-canvas');
+    const ctx = canvas.getContext('2d');
+    const zoomInput = overlay.querySelector('#profile-crop-zoom');
+
+    function draw() {
+      const size = 260;
+      ctx.clearRect(0, 0, size, size);
+      ctx.fillStyle = '#111827';
+      ctx.fillRect(0, 0, size, size);
+
+      const width = img.width * zoom;
+      const height = img.height * zoom;
+      const x = (size - width) / 2 + offsetX;
+      const y = (size - height) / 2 + offsetY;
+
+      ctx.drawImage(img, x, y, width, height);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function buildAttachment() {
+      const output = document.createElement('canvas');
+      output.width = 180;
+      output.height = 180;
+      const out = output.getContext('2d');
+      out.fillStyle = '#ffffff';
+      out.fillRect(0, 0, 180, 180);
+
+      const scale = 180 / 260;
+      const width = img.width * zoom * scale;
+      const height = img.height * zoom * scale;
+      const x = (180 - width) / 2 + offsetX * scale;
+      const y = (180 - height) / 2 + offsetY * scale;
+
+      out.drawImage(img, x, y, width, height);
+
+      return {
+        name: makeProcessedFileName(file.name, 'profile', 'jpg'),
+        type: 'image/jpeg',
+        data: output.toDataURL('image/jpeg', 0.86)
+      };
+    }
+
+    zoomInput.addEventListener('input', () => {
+      zoom = Number(zoomInput.value || 1);
+      draw();
+    });
+
+    const start = (clientX, clientY) => {
+      dragging = true;
+      lastX = clientX;
+      lastY = clientY;
+    };
+
+    const move = (clientX, clientY) => {
+      if (!dragging) return;
+      offsetX += clientX - lastX;
+      offsetY += clientY - lastY;
+      lastX = clientX;
+      lastY = clientY;
+      draw();
+    };
+
+    const end = () => {
+      dragging = false;
+    };
+
+    canvas.addEventListener('mousedown', (event) => start(event.clientX, event.clientY));
+    window.addEventListener('mousemove', (event) => move(event.clientX, event.clientY));
+    window.addEventListener('mouseup', end);
+    canvas.addEventListener('touchstart', (event) => {
+      event.preventDefault();
+      const touch = event.touches[0];
+      start(touch.clientX, touch.clientY);
+    }, { passive: false });
+    canvas.addEventListener('touchmove', (event) => {
+      event.preventDefault();
+      const touch = event.touches[0];
+      move(touch.clientX, touch.clientY);
+    }, { passive: false });
+    canvas.addEventListener('touchend', end);
+
+    overlay.querySelector('#profile-crop-confirm').addEventListener('click', () => {
+      const attachment = buildAttachment();
+      overlay.remove();
+      resolve(attachment);
+    });
+
+    overlay.querySelector('#profile-crop-cancel').addEventListener('click', () => {
+      overlay.remove();
+      resolve(null);
+    });
+
+    draw();
+  }));
+}
+
+function prepareSignatureAttachment(file) {
+  if (!file) {
+    return Promise.resolve(null);
+  }
+
+  return loadImageFromFile(file).then((img) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 600;
+    canvas.height = 180;
+
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+    const width = Math.round(img.width * scale);
+    const height = Math.round(img.height * scale);
+    const x = Math.round((canvas.width - width) / 2);
+    const y = Math.round((canvas.height - height) / 2);
+
+    ctx.drawImage(img, x, y, width, height);
+
+    return {
+      name: makeProcessedFileName(file.name, 'signature', 'png'),
+      type: 'image/png',
+      data: canvas.toDataURL('image/png')
+    };
+  });
+}
+
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file.type || !file.type.includes('image/')) {
+      reject(new Error('กรุณาเลือกไฟล์รูปภาพ'));
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('อ่านรูปภาพไม่สำเร็จ'));
+      img.src = reader.result;
+    };
+
+    reader.onerror = () => reject(new Error('อ่านไฟล์ไม่สำเร็จ'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function makeProcessedFileName(originalName, prefix, extension) {
+  const base = String(originalName || prefix)
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^\wก-๙-]+/g, '_')
+    .slice(0, 40);
+
+  return `${prefix}_${base}.${extension}`;
+}
+
+function openProfileSettings() {
+  if (!currentUser) {
+    showError('กรุณาเข้าสู่ระบบก่อนแก้ไขโปรไฟล์');
+    return;
+  }
+
+  croppedProfileDialogPhoto = null;
+
+  Swal.fire({
+    icon: 'info',
+    title: 'โปรไฟล์ของฉัน',
+    html: `
+      <div class="text-left space-y-3">
+        <div class="rounded-xl bg-slate-50 border p-3 text-sm">
+          <div class="font-bold">${currentUser.name || '-'}</div>
+          <div class="text-slate-600">ตำแหน่ง: ${currentUser.position || '-'}</div>
+        </div>
+        <button
+          id="profile-change-pin-btn"
+          type="button"
+          class="w-full rounded-xl bg-slate-800 text-white px-4 py-2 font-semibold">
+          เปลี่ยน PIN
+        </button>
+        <div class="grid grid-cols-1 gap-3">
+          <div class="rounded-xl border bg-white p-3">
+            <div class="text-sm font-semibold text-slate-700 mb-2">รูปประจำตัวปัจจุบัน</div>
+            ${currentUser.profilePhotoUrl
+              ? `<img src="${escapeAttribute(currentUser.profilePhotoUrl)}" style="width:180px;height:180px;" class="rounded-full object-cover border mx-auto">`
+              : `<div style="width:180px;height:180px;" class="rounded-full border bg-slate-100 mx-auto flex items-center justify-center text-slate-400 text-sm">ยังไม่มีรูป</div>`}
+            <label class="mt-2 flex items-center gap-2 text-sm text-red-700">
+              <input id="profile-remove-photo" type="checkbox">
+              ลบรูปประจำตัว
+            </label>
+          </div>
+          <div class="rounded-xl border bg-white p-3">
+            <div class="text-sm font-semibold text-slate-700 mb-2">ลายเซ็นปัจจุบัน</div>
+            ${currentUser.signatureUrl
+              ? `<img src="${escapeAttribute(currentUser.signatureUrl)}" style="height:180px;" class="w-full object-contain bg-white border rounded-lg p-2">`
+              : `<div style="height:180px;" class="w-full border rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-sm">ยังไม่มีลายเซ็น</div>`}
+            <label class="mt-2 flex items-center gap-2 text-sm text-red-700">
+              <input id="profile-remove-signature" type="checkbox">
+              ลบลายเซ็น
+            </label>
+          </div>
+        </div>
+        <label class="block text-sm font-semibold text-slate-700">
+          เปลี่ยนรูปประจำตัว
+          <input id="profile-photo-file" type="file" accept="image/*" class="swal2-file" style="width:100%;margin:6px 0 0 0;">
+        </label>
+        <div class="text-xs text-slate-500">หลังเลือกรูป ระบบจะแสดงภาพรวมก่อน แล้วให้ลาก/ซูมเพื่อเลือกใบหน้าหรือส่วนที่ต้องการ</div>
+        <img id="profile-photo-preview" class="hidden rounded-full object-cover border mx-auto" style="width:180px;height:180px;">
+        <label class="block text-sm font-semibold text-slate-700">
+          เปลี่ยนรูปลายเซ็น
+          <input id="profile-signature-file" type="file" accept="image/*" class="swal2-file" style="width:100%;margin:6px 0 0 0;">
+        </label>
+        <img id="profile-signature-preview" class="hidden w-full object-contain bg-white border rounded-lg p-2" style="height:180px;">
+        <div class="text-xs text-slate-500">
+          ไม่จำเป็นต้องเลือกทั้งสองไฟล์ เลือกเฉพาะรายการที่ต้องการเปลี่ยน ขนาดไม่เกิน 2 MB ต่อไฟล์
+        </div>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: 'บันทึกโปรไฟล์',
+    cancelButtonText: 'ยกเลิก',
+    focusConfirm: false,
+    didOpen: () => {
+      const photoInput = document.getElementById('profile-photo-file');
+      const signatureInput = document.getElementById('profile-signature-file');
+      const changePinBtn = document.getElementById('profile-change-pin-btn');
+
+      if (photoInput) {
+        photoInput.addEventListener('change', previewProfileDialogPhoto);
+      }
+
+      if (signatureInput) {
+        signatureInput.addEventListener('change', previewProfileDialogSignature);
+      }
+
+      if (changePinBtn) {
+        changePinBtn.addEventListener('click', () => {
+          Swal.close();
+          setTimeout(openChangePinDialog, 150);
+        });
+      }
+    },
+    preConfirm: () => {
+      const profileFile = getProfileDialogFile('profile-photo-file');
+      const signatureFile = getProfileDialogFile('profile-signature-file');
+      const removePhotoEl = document.getElementById('profile-remove-photo');
+      const removeSignatureEl = document.getElementById('profile-remove-signature');
+      const removeProfilePhoto = Boolean(removePhotoEl && removePhotoEl.checked);
+      const removeSignature = Boolean(removeSignatureEl && removeSignatureEl.checked);
+
+      if (!profileFile && !signatureFile && !removeProfilePhoto && !removeSignature) {
+        Swal.showValidationMessage('กรุณาเลือกไฟล์ใหม่ หรือติ๊กเพื่อลบข้อมูลเดิม');
+        return false;
+      }
+
+      if (profileFile && !croppedProfileDialogPhoto) {
+        Swal.showValidationMessage('กรุณาจัดตำแหน่งรูปประจำตัวก่อนบันทึก');
+        return false;
+      }
+
+      if ((profileFile && profileFile.size > 2 * 1024 * 1024) ||
+          (signatureFile && signatureFile.size > 2 * 1024 * 1024)) {
+        Swal.showValidationMessage('ไฟล์ต้องมีขนาดไม่เกิน 2 MB');
+        return false;
+      }
+
+      return Promise
+        .all([
+          Promise.resolve(croppedProfileDialogPhoto || null),
+          prepareSignatureAttachment(signatureFile)
+        ])
+        .then(([profilePhoto, signature]) => ({
+          profilePhoto,
+          signature,
+          removeProfilePhoto,
+          removeSignature
+        }));
+    }
+  }).then((result) => {
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    Swal.fire({
+      title: 'กำลังบันทึกโปรไฟล์...',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+
+    google.script.run
+      .withSuccessHandler((res) => {
+        if (!res || !res.success) {
+          Swal.fire('ไม่สำเร็จ', res && res.message ? res.message : 'บันทึกโปรไฟล์ไม่สำเร็จ', 'error');
+          return;
+        }
+
+        currentUser.profilePhotoUrl = res.profilePhotoUrl || '';
+        currentUser.signatureUrl = res.signatureUrl || '';
+        currentUser.profilePhotoFileId = res.profilePhotoFileId || '';
+        currentUser.signatureFileId = res.signatureFileId || '';
+
+        showUserInfo();
+
+        Swal.fire({
+          icon: 'success',
+          title: res.message || 'อัปเดตโปรไฟล์เรียบร้อยแล้ว'
+        });
+      })
+      .withFailureHandler((err) => {
+        Swal.fire('ผิดพลาด', err.message || 'บันทึกโปรไฟล์ไม่สำเร็จ', 'error');
+      })
+      .updateUserProfile({
+        phone: currentUser.phone,
+        profilePhoto: result.value.profilePhoto,
+        signature: result.value.signature,
+        removeProfilePhoto: result.value.removeProfilePhoto,
+        removeSignature: result.value.removeSignature
+      });
+  });
+}
+
+function previewProfileDialogPhoto() {
+  const file = getProfileDialogFile('profile-photo-file');
+  const preview = document.getElementById('profile-photo-preview');
+  croppedProfileDialogPhoto = null;
+
+  if (!file || !preview) {
+    if (preview) preview.classList.add('hidden');
+    return;
+  }
+
+  openProfilePhotoCropper(file)
+    .then((attachment) => {
+      if (!attachment) {
+        preview.classList.add('hidden');
+        return;
+      }
+
+      croppedProfileDialogPhoto = attachment;
+      preview.src = attachment.data;
+      preview.classList.remove('hidden');
+    })
+    .catch((err) => Swal.showValidationMessage(err.message || 'แสดงตัวอย่างรูปไม่สำเร็จ'));
+}
+
+function previewProfileDialogSignature() {
+  const file = getProfileDialogFile('profile-signature-file');
+  const preview = document.getElementById('profile-signature-preview');
+
+  if (!file || !preview) {
+    if (preview) preview.classList.add('hidden');
+    return;
+  }
+
+  prepareSignatureAttachment(file)
+    .then((attachment) => {
+      preview.src = attachment.data;
+      preview.classList.remove('hidden');
+    })
+    .catch((err) => Swal.showValidationMessage(err.message || 'แสดงตัวอย่างลายเซ็นไม่สำเร็จ'));
+}
+
+function getProfileDialogFile(id) {
+  const input = document.getElementById(id);
+
+  return input && input.files && input.files[0]
+    ? input.files[0]
+    : null;
+}
+
+function login() {
+
+  const phone =
+    normalizePhoneInput(document.getElementById(
+      'phone'
+    ).value);
+
+  const pin =
+    normalizePinInput(document.getElementById(
+      'pin'
+    ).value);
+
+  if (!phone) {
+
+    showError('กรุณากรอกเบอร์โทร');
+    return;
+  }
+
+  setLoginLoading(true);
+
+  const loginTimeout = setTimeout(() => {
+    setLoginLoading(false);
+    showError('เข้าสู่ระบบนานเกินไป กรุณาลองใหม่ หรือตรวจสอบการ Deploy เวอร์ชันล่าสุด');
+  }, 15000);
+
+  google.script.run
+
+    .withSuccessHandler((res) => {
+      clearTimeout(loginTimeout);
+      setLoginLoading(false);
+
+      if (res.success) {
+
+        currentUser = res;
+
+        localStorage.setItem(
+          'phone',
+          currentUser.phone
+        );
+
+        Swal.fire({
+          icon: 'success',
+          title: 'Login สำเร็จ'
+        });
+
+        document.getElementById(
+          'login-section'
+        ).classList.add('hidden');
+
+        document.getElementById(
+          'main-section'
+        ).classList.remove('hidden');
+
+        showRoleMenu();
+
+        showUserInfo();
+
+        startCheckinClock();
+
+        hideCheckinButton();
+
+        applyTodayCheckinState(res.todayCheckin);
+
+        if (res.requirePinSetup) {
+          openInitialPinSetupDialog();
+        }
+
+      } else {
+
+        Swal.fire({
+          icon: 'error',
+          title: res.message
+        });
+      }
+
+    })
+
+    .withFailureHandler((err) => {
+      clearTimeout(loginTimeout);
+      setLoginLoading(false);
+
+      showError(err.message || 'เข้าสู่ระบบไม่สำเร็จ');
+
+    })
+
+    .loginUser(phone, pin);
+}
+
+function openInitialPinSetupDialog() {
+  if (!currentUser) {
+    return;
+  }
+
+  Swal.fire({
+    icon: 'warning',
+    title: 'ตั้งค่า PIN 4 หลัก',
+    html: `
+      <div class="text-left text-sm text-slate-600 mb-3">
+        บัญชีนี้ยังไม่มี PIN กรุณาตั้ง PIN เพื่อใช้เข้าสู่ระบบครั้งต่อไป
+      </div>
+      <input id="new-pin" type="password" inputmode="numeric" maxlength="4" class="swal2-input" placeholder="PIN 4 หลัก">
+      <input id="new-pin-confirm" type="password" inputmode="numeric" maxlength="4" class="swal2-input" placeholder="ยืนยัน PIN">
+    `,
+    allowOutsideClick: false,
+    allowEscapeKey: false,
+    showCancelButton: false,
+    confirmButtonText: 'บันทึก PIN',
+    preConfirm: () => {
+      const newPin = normalizePinInput(document.getElementById('new-pin').value);
+      const confirmPin = normalizePinInput(document.getElementById('new-pin-confirm').value);
+
+      if (!isValidPinInput(newPin)) {
+        Swal.showValidationMessage('PIN ต้องเป็นตัวเลข 4 หลัก');
+        return false;
+      }
+
+      if (newPin !== confirmPin) {
+        Swal.showValidationMessage('PIN และยืนยัน PIN ไม่ตรงกัน');
+        return false;
+      }
+
+      return new Promise((resolve) => {
+        google.script.run
+          .withSuccessHandler((res) => resolve(res))
+          .withFailureHandler((err) => resolve({
+            success: false,
+            message: err.message || 'ตั้งค่า PIN ไม่สำเร็จ'
+          }))
+          .setUserPin({
+            phone: currentUser.phone,
+            newPin
+          });
+      }).then((res) => {
+        if (!res || !res.success) {
+          Swal.showValidationMessage(res && res.message ? res.message : 'ตั้งค่า PIN ไม่สำเร็จ');
+          return false;
+        }
+
+        currentUser.requirePinSetup = false;
+        return res;
+      });
+    }
+  }).then((result) => {
+    if (result.isConfirmed) {
+      Swal.fire('สำเร็จ', result.value.message || 'ตั้งค่า PIN เรียบร้อยแล้ว', 'success');
+    }
+  });
+}
+
+function openChangePinDialog() {
+  if (!currentUser) {
+    showError('กรุณาเข้าสู่ระบบก่อนเปลี่ยน PIN');
+    return;
+  }
+
+  Swal.fire({
+    icon: 'info',
+    title: 'เปลี่ยน PIN',
+    html: `
+      <input id="current-pin" type="password" inputmode="numeric" maxlength="4" class="swal2-input" placeholder="PIN เดิม">
+      <input id="change-new-pin" type="password" inputmode="numeric" maxlength="4" class="swal2-input" placeholder="PIN ใหม่ 4 หลัก">
+      <input id="change-new-pin-confirm" type="password" inputmode="numeric" maxlength="4" class="swal2-input" placeholder="ยืนยัน PIN ใหม่">
+    `,
+    showCancelButton: true,
+    confirmButtonText: 'บันทึก PIN',
+    cancelButtonText: 'ยกเลิก',
+    preConfirm: () => {
+      const currentPin = normalizePinInput(document.getElementById('current-pin').value);
+      const newPin = normalizePinInput(document.getElementById('change-new-pin').value);
+      const confirmPin = normalizePinInput(document.getElementById('change-new-pin-confirm').value);
+
+      if (!isValidPinInput(currentPin)) {
+        Swal.showValidationMessage('กรุณากรอก PIN เดิม 4 หลัก');
+        return false;
+      }
+
+      if (!isValidPinInput(newPin)) {
+        Swal.showValidationMessage('PIN ใหม่ต้องเป็นตัวเลข 4 หลัก');
+        return false;
+      }
+
+      if (newPin !== confirmPin) {
+        Swal.showValidationMessage('PIN ใหม่และยืนยัน PIN ไม่ตรงกัน');
+        return false;
+      }
+
+      return new Promise((resolve) => {
+        google.script.run
+          .withSuccessHandler((res) => resolve(res))
+          .withFailureHandler((err) => resolve({
+            success: false,
+            message: err.message || 'เปลี่ยน PIN ไม่สำเร็จ'
+          }))
+          .setUserPin({
+            phone: currentUser.phone,
+            currentPin,
+            newPin
+          });
+      }).then((res) => {
+        if (!res || !res.success) {
+          Swal.showValidationMessage(res && res.message ? res.message : 'เปลี่ยน PIN ไม่สำเร็จ');
+          return false;
+        }
+
+        return res;
+      });
+    }
+  }).then((result) => {
+    if (result.isConfirmed) {
+      Swal.fire('สำเร็จ', result.value.message || 'เปลี่ยน PIN เรียบร้อยแล้ว', 'success');
+    }
+  });
+}
+
+function checkin() {
+  const btn = document.querySelector('button[onclick="checkin()"]');
+
+  if (!btn) {
+    showError('ไม่พบปุ่มเช็กอิน');
+    return;
+  }
+
+  if (!currentUser) {
+    showError('กรุณาเข้าสู่ระบบใหม่');
+    return;
+  }
+
+  if (checkinInProgress) {
+    return;
+  }
+
+  checkinInProgress = true;
+  startCheckinWithLocation(btn);
+}
+
+function startCheckinWithLocation(btn) {
+  checkinInProgress = true;
+  btn.disabled = true;
+  btn.innerHTML = 'กำลังบันทึก...';
+
+  if (!navigator.geolocation) {
+    checkinInProgress = false;
+    resetCheckinButton(btn);
+    showError('อุปกรณ์นี้ไม่รองรับการระบุตำแหน่ง');
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      submitCheckin(btn, position, {});
+    },
+    () => {
+      checkinInProgress = false;
+      resetCheckinButton(btn);
+      showError('ไม่สามารถอ่านตำแหน่งได้ กรุณาอนุญาต GPS แล้วลองใหม่');
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 0
+    }
+  );
+}
+
+function submitCheckin(btn, position, extraData) {
+  checkinInProgress = true;
+
+  google.script.run
+
+    .withSuccessHandler((res) => {
+      checkinInProgress = false;
+
+      if (res.requireLateReason) {
+        askLateReason(btn, position);
+        return;
+      }
+
+      if (!res.success) {
+        resetCheckinButton(btn);
+
+        if (res.message && res.message.includes('ลงเวลาแล้ว')) {
+          showAlreadyCheckedIn(res);
+          return;
+        }
+
+        showError(res.message);
+        return;
+      }
+
+      btn.style.display = 'none';
+
+      Swal.fire({
+        icon: 'success',
+        title: res.message
+      });
+
+      document.querySelector('.status-card').innerHTML = `
+        ✅ ลงเวลาแล้ว
+        <br>
+        ${res.timeStatus || ''} ${res.checkinTime ? '(' + res.checkinTime + ')' : ''}
+        <br>
+        ${res.approvalStatus || ''}
+      `;
+    })
+
+    .withFailureHandler((err) => {
+      checkinInProgress = false;
+      resetCheckinButton(btn);
+      showError(err.message || 'บันทึกเวลาไม่สำเร็จ');
+    })
+
+    .saveCheckin({
+      name: currentUser.name,
+      phone: currentUser.phone,
+      position: currentUser.position,
+      lat: position.coords.latitude,
+      lng: position.coords.longitude,
+      reason: extraData.reason || '',
+      submitWithoutReason: extraData.submitWithoutReason || false
+    });
+}
+
+function askLateReason(btn, position) {
+  resetCheckinButton(btn);
+
+  Swal.fire({
+    icon: 'warning',
+    title: 'คุณมาสาย',
+    input: 'textarea',
+    inputLabel: 'กรุณาระบุเหตุผล',
+    inputPlaceholder: 'เช่น ติดภารกิจโรงเรียน, รถติด, พบแพทย์',
+    showCancelButton: true,
+    confirmButtonText: 'ส่งเหตุผล',
+    cancelButtonText: 'ไม่ขออนุมัติ',
+    inputValidator: (value) => {
+      if (!value) {
+        return 'กรุณาระบุเหตุผล';
+      }
+    }
+  }).then((result) => {
+    checkinInProgress = true;
+    btn.disabled = true;
+    btn.innerHTML = 'กำลังบันทึก...';
+
+    if (result.isConfirmed) {
+      submitCheckin(btn, position, {
+        reason: result.value
+      });
+    } else {
+      submitCheckin(btn, position, {
+        submitWithoutReason: true
+      });
+    }
+  });
+}
+
+function checkAlreadyCheckin() {
+  if (!currentUser) {
+    return;
+  }
+
+  hideCheckinButton();
+
+  document.querySelector('.status-card').innerHTML = `
+    🔎 กำลังตรวจสอบสถานะลงเวลา...
+  `;
+
+  const checkTimeout = setTimeout(() => {
+    document.querySelector('.status-card').innerHTML = `
+      ⚠️ ยังตรวจสอบสถานะลงเวลาไม่ได้
+      <br>
+      กรุณาโหลดหน้าใหม่อีกครั้ง
+    `;
+  }, 12000);
+
+  google.script.run
+
+    .withSuccessHandler((res) => {
+      clearTimeout(checkTimeout);
+
+      if (res.checkedIn) {
+        showAlreadyCheckedIn(res);
+        return;
+      }
+
+      showCheckinButton();
+
+      document.querySelector('.status-card').innerHTML = `
+        🟢 พร้อมลงเวลา
+      `;
+
+    })
+
+    .withFailureHandler((err) => {
+      clearTimeout(checkTimeout);
+      hideCheckinButton();
+      document.querySelector('.status-card').innerHTML = `
+        ⚠️ ยังตรวจสอบสถานะลงเวลาไม่ได้
+        <br>
+        กรุณาโหลดหน้าใหม่อีกครั้ง
+      `;
+      showError(err.message || 'ตรวจสอบสถานะลงเวลาไม่สำเร็จ');
+    })
+
+    .checkTodayCheckinForUser(currentUser);
+}
+
+function getTodayDateInputValue() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function openLatePermissionRequest() {
+  openPermissionRequest('มาสาย');
+}
+
+function openLeavePermissionRequest() {
+  openPermissionRequest('ลา');
+}
+
+function openOfficialDutyPermissionRequest() {
+  openPermissionRequest('ไปราชการ');
+}
+
+function selectLeaveCheckbox(selectedId) {
+  const ids = [
+    'permission-leave-sick',
+    'permission-leave-personal'
+  ];
+
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+
+    if (el && id !== selectedId) {
+      el.checked = false;
+    }
+  });
+}
+
+function openPermissionRequest(requestType) {
+  if (!currentUser) {
+    showError('กรุณาเข้าสู่ระบบก่อนส่งคำขอ');
+    return;
+  }
+
+  const today = getTodayDateInputValue();
+  const isLate = requestType === 'มาสาย';
+  const isLeave = requestType === 'ลา';
+  const icon = isLate ? 'warning' : 'info';
+  const confirmColor = isLate ? '#d97706' : requestType === 'ลา' ? '#7c3aed' : '#0284c7';
+  const expectedTimeField = isLate ? `
+        <label class="block text-sm font-semibold text-slate-700">
+          เวลาที่คาดว่าจะมาถึง
+          <input id="permission-expected-time" type="time" class="swal2-input" style="width:100%;margin:6px 0 0 0;">
+        </label>
+  ` : '';
+  const leaveTypeField = isLeave ? `
+        <label class="block text-sm font-semibold text-slate-700">
+          ประเภทการลา
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+            <label style="display:flex;align-items:center;gap:8px;border:1px solid #ddd6fe;background:#faf5ff;border-radius:14px;padding:12px;cursor:pointer;">
+              <input id="permission-leave-sick" type="checkbox" value="ลาป่วย" onchange="selectLeaveCheckbox('permission-leave-sick')" style="width:18px;height:18px;accent-color:#7c3aed;">
+              <span style="font-weight:700;color:#6d28d9;">ลาป่วย</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;border:1px solid #f5d0fe;background:#fdf4ff;border-radius:14px;padding:12px;cursor:pointer;">
+              <input id="permission-leave-personal" type="checkbox" value="ลากิจ" onchange="selectLeaveCheckbox('permission-leave-personal')" style="width:18px;height:18px;accent-color:#c026d3;">
+              <span style="font-weight:700;color:#a21caf;">ลากิจ</span>
+            </label>
+          </div>
+        </label>
+        <label class="block text-sm font-semibold text-slate-700">
+          วันที่สิ้นสุดการลา
+          <input id="permission-end-date" type="date" value="${today}" class="swal2-input" style="width:100%;margin:6px 0 0 0;">
+        </label>
+        <label class="block text-sm font-semibold text-slate-700">
+          แนบหลักฐาน (ไม่บังคับ)
+          <input id="permission-evidence-file" type="file" accept="image/*,application/pdf" class="swal2-file" style="width:100%;margin:6px 0 0 0;">
+          <div class="text-xs text-slate-500 mt-1">รองรับรูปภาพหรือ PDF ขนาดไม่เกิน 5 MB</div>
+        </label>
+  ` : '';
+
+  Swal.fire({
+    icon: icon,
+    title: 'ขออนุญาต' + requestType,
+    html: `
+      <div class="text-left space-y-3">
+        <div class="rounded-xl bg-amber-50 border border-amber-100 p-3 text-sm text-amber-900">
+          ส่งคำขอได้จากทุกที่ ระบบนี้ไม่ตรวจ GPS
+        </div>
+        <label class="block text-sm font-semibold text-slate-700">
+          วันที่ขออนุญาต
+          <input id="permission-request-date" type="date" value="${today}" class="swal2-input" style="width:100%;margin:6px 0 0 0;">
+        </label>
+        ${leaveTypeField}
+        ${expectedTimeField}
+        <label class="block text-sm font-semibold text-slate-700">
+          เหตุผล
+          <textarea id="permission-request-reason" class="swal2-textarea" placeholder="ระบุเหตุผลประกอบคำขอ" style="width:100%;margin:6px 0 0 0;"></textarea>
+        </label>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: 'ส่งคำขอ',
+    cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: confirmColor,
+    focusConfirm: false,
+    preConfirm: () => {
+      const requestDate = document.getElementById('permission-request-date').value;
+      const expectedTimeEl = document.getElementById('permission-expected-time');
+      const expectedTime = expectedTimeEl ? expectedTimeEl.value : '';
+      const sickLeaveEl = document.getElementById('permission-leave-sick');
+      const personalLeaveEl = document.getElementById('permission-leave-personal');
+      const finalRequestType = isLeave
+        ? (
+            sickLeaveEl && sickLeaveEl.checked
+              ? 'ลาป่วย'
+              : personalLeaveEl && personalLeaveEl.checked
+                ? 'ลากิจ'
+                : ''
+          )
+        : requestType;
+      const endDateEl = document.getElementById('permission-end-date');
+      const endDate = endDateEl ? endDateEl.value : requestDate;
+      const evidenceEl = document.getElementById('permission-evidence-file');
+      const evidenceFile = evidenceEl && evidenceEl.files && evidenceEl.files[0]
+        ? evidenceEl.files[0]
+        : null;
+      const reason = document.getElementById('permission-request-reason').value.trim();
+
+      if (!requestDate) {
+        Swal.showValidationMessage('กรุณาเลือกวันที่');
+        return false;
+      }
+
+      if (isLate && !expectedTime) {
+        Swal.showValidationMessage('กรุณาระบุเวลาที่คาดว่าจะมาถึง');
+        return false;
+      }
+
+      if (isLeave && !finalRequestType) {
+        Swal.showValidationMessage('กรุณาเลือกประเภทการลา');
+        return false;
+      }
+
+      if (isLeave && !endDate) {
+        Swal.showValidationMessage('กรุณาเลือกวันที่สิ้นสุดการลา');
+        return false;
+      }
+
+      if (isLeave && endDate < requestDate) {
+        Swal.showValidationMessage('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่มลา');
+        return false;
+      }
+
+      if (!reason) {
+        Swal.showValidationMessage('กรุณาระบุเหตุผล');
+        return false;
+      }
+
+      if (evidenceFile && evidenceFile.size > 5 * 1024 * 1024) {
+        Swal.showValidationMessage('ไฟล์หลักฐานต้องมีขนาดไม่เกิน 5 MB');
+        return false;
+      }
+
+      return readEvidenceFile(evidenceFile).then((attachment) => ({
+        requestType: finalRequestType,
+        requestDate,
+        endDate,
+        expectedTime,
+        reason,
+        attachment
+      }));
+    }
+  }).then((result) => {
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    Swal.fire({
+      title: 'กำลังส่งคำขอ...',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+
+    google.script.run
+      .withSuccessHandler((res) => {
+        if (!res || !res.success) {
+          Swal.fire('ไม่สำเร็จ', res && res.message ? res.message : 'ส่งคำขอไม่สำเร็จ', 'error');
+          return;
+        }
+
+        const sequenceText = res.leaveSequence
+          ? (res.leaveTermSummary || `ครั้งนี้เป็นการลาครั้งที่ ${res.leaveSequence} ของปีการศึกษานี้`)
+          : (res.approvalStatus || 'รออนุมัติ');
+
+        Swal.fire({
+          icon: 'success',
+          title: 'ส่งคำขอแล้ว',
+          text: sequenceText
+        });
+      })
+      .withFailureHandler((err) => {
+        Swal.fire('ผิดพลาด', err.message || 'ส่งคำขอไม่สำเร็จ', 'error');
+      })
+      .submitPermissionRequest({
+        name: currentUser.name,
+        phone: currentUser.phone,
+        position: currentUser.position,
+        requestType: result.value.requestType,
+        requestDate: result.value.requestDate,
+        endDate: result.value.endDate,
+        expectedTime: result.value.expectedTime,
+        reason: result.value.reason,
+        attachment: result.value.attachment
+      });
+  });
+}
+
+function readEvidenceFile(file) {
+  if (!file) {
+    return Promise.resolve(null);
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      resolve({
+        name: file.name,
+        type: file.type || 'application/octet-stream',
+        data: reader.result
+      });
+    };
+
+    reader.onerror = () => reject(new Error('อ่านไฟล์หลักฐานไม่สำเร็จ'));
+    reader.readAsDataURL(file);
+  });
+}
+function toggleMenu() {
+
+  document.getElementById(
+    'floating-menu'
+  ).classList.toggle('hidden');
+}
+
+function logout() {
+
+  localStorage.clear();
+  currentUser = null;
+
+  document.getElementById(
+    'main-section'
+  ).classList.add('hidden');
+
+  document.getElementById(
+    'register-section'
+  ).classList.add('hidden');
+
+  document.getElementById(
+    'login-section'
+  ).classList.remove('hidden');
+
+  showCheckinButton();
+
+  document.querySelector('.status-card').innerHTML = `
+    🟢 พร้อมลงเวลา
+  `;
+}
+
+function openMyHistory() {
+  if (!currentUser) {
+    showError('กรุณาเข้าสู่ระบบก่อนดูประวัติ');
+    return;
+  }
+
+  if (currentUser.role === 'director') {
+    showError('ผู้บริหารดูข้อมูลภาพรวมได้จาก Dashboard');
+    return;
+  }
+
+  Swal.fire({
+    title: 'กำลังโหลดประวัติ...',
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading()
+  });
+
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || !res.success) {
+        Swal.fire('ผิดพลาด', res && res.message ? res.message : 'โหลดประวัติไม่สำเร็จ', 'error');
+        return;
+      }
+
+      Swal.fire({
+        title: 'ประวัติของฉัน',
+        width: 980,
+        html: buildMyHistoryHtml(res),
+        confirmButtonText: 'ปิด',
+        confirmButtonColor: '#7c2d12'
+      });
+    })
+    .withFailureHandler((err) => {
+      Swal.fire('ผิดพลาด', err.message || 'โหลดประวัติไม่สำเร็จ', 'error');
+    })
+    .getMyHistory(currentUser.phone);
+}
+
+function buildMyHistoryHtml(res) {
+  const checkins = res.checkins || [];
+  const permissions = res.permissions || [];
+
+  return `
+    <div class="text-left space-y-5">
+      <div class="rounded-xl bg-slate-50 border p-3 text-sm">
+        <div class="font-bold text-slate-900">${escapeHtml(res.user && res.user.name ? res.user.name : currentUser.name)}</div>
+        <div class="text-slate-600">ตำแหน่ง: ${escapeHtml(res.user && res.user.position ? res.user.position : currentUser.position || '-')}</div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-bold text-slate-900">ประวัติการลงเวลา</h3>
+          <span class="rounded-full bg-slate-100 text-slate-700 px-3 py-1 text-xs">${checkins.length} รายการ</span>
+        </div>
+        ${buildMyCheckinHistoryTable(checkins)}
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-bold text-slate-900">ประวัติการลา / ขออนุญาต</h3>
+          <span class="rounded-full bg-violet-50 text-violet-700 px-3 py-1 text-xs">${permissions.length} รายการ</span>
+        </div>
+        ${buildMyPermissionHistoryTable(permissions)}
+      </div>
+    </div>
+  `;
+}
+
+function buildMyCheckinHistoryTable(rows) {
+  if (!rows.length) {
+    return '<div class="border rounded-xl p-4 text-center text-slate-500">ยังไม่มีประวัติการลงเวลา</div>';
+  }
+
+  return `
+    <div class="overflow-x-auto border rounded-xl">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-100">
+          <tr>
+            <th class="text-left p-2">วันที่</th>
+            <th class="text-left p-2">เวลาเข้า</th>
+            <th class="text-left p-2">เวลากลับ</th>
+            <th class="text-left p-2">สถานะเวลา</th>
+            <th class="text-left p-2">สถานะอนุมัติ</th>
+            <th class="text-left p-2">เหตุผล</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row) => `
+            <tr class="border-t">
+              <td class="p-2">${escapeHtml(row.date || '-')}</td>
+              <td class="p-2">${escapeHtml(row.checkinTime || '-')}</td>
+              <td class="p-2">${escapeHtml(row.checkoutTime || '-')}</td>
+              <td class="p-2">${buildMiniStatusBadge(row.timeStatus, 'time')}</td>
+              <td class="p-2">${buildMiniStatusBadge(row.approvalStatus, 'approval')}</td>
+              <td class="p-2">${escapeHtml(row.reason || '-')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function buildMyPermissionHistoryTable(rows) {
+  if (!rows.length) {
+    return '<div class="border rounded-xl p-4 text-center text-slate-500">ยังไม่มีประวัติการลา / ขออนุญาต</div>';
+  }
+
+  return `
+    <div class="overflow-x-auto border rounded-xl">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-100">
+          <tr>
+            <th class="text-left p-2">วันที่</th>
+            <th class="text-left p-2">ประเภท</th>
+            <th class="text-left p-2">เลขที่</th>
+            <th class="text-left p-2">จำนวนวัน</th>
+            <th class="text-left p-2">สถานะ</th>
+            <th class="text-left p-2">เหตุผล</th>
+            <th class="text-left p-2">หลักฐาน</th>
+            <th class="text-left p-2">PDF</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row) => `
+            <tr class="border-t">
+              <td class="p-2">${escapeHtml(formatMyDateRange(row.startDate, row.endDate))}</td>
+              <td class="p-2">${buildMiniStatusBadge(row.requestType, 'time')}</td>
+              <td class="p-2 font-semibold">${escapeHtml(row.documentNo || '-')}</td>
+              <td class="p-2">${escapeHtml(row.days || '-')}</td>
+              <td class="p-2">${buildMiniStatusBadge(row.approvalStatus, 'approval')}</td>
+              <td class="p-2">${escapeHtml(row.reason || '-')}</td>
+              <td class="p-2">${buildMyFileLink(row.evidenceUrl, 'ดูหลักฐาน')}</td>
+              <td class="p-2">${buildMyFileLink(row.leavePdfUrl, 'ดูใบลา')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function formatMyDateRange(startDate, endDate) {
+  if (!endDate || endDate === startDate) {
+    return startDate || '-';
+  }
+
+  return (startDate || '-') + ' ถึง ' + endDate;
+}
+
+function buildMyFileLink(url, label) {
+  if (!url) {
+    return '<span class="text-slate-400">-</span>';
+  }
+
+  return `<a href="${escapeAttribute(url)}" target="_blank" class="text-blue-700 underline font-semibold">${escapeHtml(label)}</a>`;
+}
+
+function cleanMiniStatusText(value) {
+  return String(value || '')
+    .replace(/[✅❌🟢🔴🟡🔵]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildMiniStatusBadge(value, type) {
+  const text = cleanMiniStatusText(value);
+
+  if (!text || text === 'ไม่ต้องอนุมัติ') {
+    return '<span class="rounded-full bg-slate-100 text-slate-600 px-2 py-1 text-xs">-</span>';
+  }
+
+  let cls = 'bg-slate-100 text-slate-700 border-slate-200';
+
+  if (text.indexOf('ปกติ') >= 0 || text.indexOf('อนุมัติแล้ว') >= 0) {
+    cls = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  } else if (text.indexOf('มาสาย') >= 0 || text.indexOf('ไม่อนุมัติ') >= 0) {
+    cls = 'bg-rose-50 text-rose-700 border-rose-200';
+  } else if (text.indexOf('รออนุมัติ') >= 0) {
+    cls = 'bg-amber-50 text-amber-700 border-amber-200';
+  } else if (text.indexOf('ลา') >= 0) {
+    cls = 'bg-violet-50 text-violet-700 border-violet-200';
+  } else if (text.indexOf('ไปราชการ') >= 0) {
+    cls = 'bg-sky-50 text-sky-700 border-sky-200';
+  }
+
+  return `<span class="rounded-full border px-2 py-1 text-xs font-semibold ${cls}">${escapeHtml(text)}</span>`;
+}
+
+function openDashboard() {
+  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'director')) {
+    showError('คุณไม่มีสิทธิ์เข้า Dashboard');
+    return;
+  }
+
+  google.script.run
+
+    .withSuccessHandler((url) => {
+
+      window.open(url, '_blank');
+
+    })
+
+    .withFailureHandler((err) => {
+
+      showError(err.message || 'เปิด Dashboard ไม่สำเร็จ');
+
+    })
+
+    .getDashboardUrl(currentUser.phone);
+}
+
+function openSettings() {
+  if (!currentUser || currentUser.role !== 'director') {
+    showError('เฉพาะผู้บริหารเท่านั้นที่เปิดหน้าตั้งค่าระบบได้');
+    return;
+  }
+
+  google.script.run
+
+    .withSuccessHandler((url) => {
+
+      window.open(url + '&view=settings', '_blank');
+
+    })
+
+    .withFailureHandler((err) => {
+
+      showError(err.message || 'เปิดหน้าตั้งค่าไม่สำเร็จ');
+
+    })
+
+    .getDashboardUrl(currentUser.phone);
+}
+
+function downloadExcel() {
+  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'director')) {
+    showError('คุณไม่มีสิทธิ์ Export Excel');
+    return;
+  }
+
+  google.script.run
+
+    .withSuccessHandler((url) => {
+
+      window.open(url, '_blank');
+
+    })
+
+    .withFailureHandler((err) => {
+
+      showError(err.message || 'Export Excel ไม่สำเร็จ');
+
+    })
+
+    .exportExcel(currentUser.phone);
+}
+
+function showRoleMenu() {
+  if (!currentUser) {
+    return;
+  }
+
+  const role =
+    currentUser.role;
+  const isDirector = role === 'director';
+  const isAdmin = role === 'admin';
+  const lateRequestBtn = document.getElementById('late-request-btn');
+  const leaveRequestBtn = document.getElementById('leave-request-btn');
+  const officialDutyRequestBtn = document.getElementById('official-duty-request-btn');
+  const myHistoryBtn = document.getElementById('my-history-btn');
+  const dashboardBtn = document.getElementById('dashboard-btn');
+  const excelBtn = document.getElementById('excel-btn');
+  const settingBtn = document.getElementById('setting-btn');
+
+  if (dashboardBtn) {
+    dashboardBtn.classList.add('hidden');
+  }
+
+  if (excelBtn) {
+    excelBtn.classList.add('hidden');
+  }
+
+  if (settingBtn) {
+    settingBtn.classList.add('hidden');
+  }
+
+  if (lateRequestBtn) {
+    lateRequestBtn.classList.toggle('hidden', isDirector);
+  }
+
+  if (leaveRequestBtn) {
+    leaveRequestBtn.classList.toggle('hidden', isDirector);
+  }
+
+  if (officialDutyRequestBtn) {
+    officialDutyRequestBtn.classList.toggle('hidden', isDirector);
+  }
+
+  if (myHistoryBtn) {
+    myHistoryBtn.classList.toggle('hidden', isDirector);
+  }
+
+  if (isAdmin || isDirector) {
+    if (dashboardBtn) {
+      dashboardBtn.classList.remove('hidden');
+    }
+
+    if (excelBtn) {
+      excelBtn.classList.remove('hidden');
+    }
+  }
+
+  if (isDirector) {
+    if (settingBtn) {
+      settingBtn.classList.remove('hidden');
+    }
+  }
+}
+
+window.onload = function() {
+  loadPublicAppSettings();
+
+  const phone =
+    localStorage.getItem(
+      'phone'
+    );
+
+  if (phone) {
+    const phoneInput = document.getElementById('phone');
+
+    if (phoneInput) {
+      phoneInput.value = phone;
+    }
+  }
+};
+
+</script>
