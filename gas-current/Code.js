@@ -12,6 +12,7 @@ const DASHBOARD_FILE = 'Dashboard';
 const REPORT_TEMPLATE_DOC_ID = '1XFEiaz3xRKVVXqQFkXpGk_Ts7oxEajElQe4VRkKvql0';
 const LEAVE_TEMPLATE_DOC_ID = '1ZRMTGxVzPg4EtDn39lUaVDGin0I_xAuhTX9STH1bXqI';
 const REPORT_FOLDER_NAME = 'รายงานลงเวลาปฏิบัติงาน';
+const LATE_AUTO_APPROVE_HOURS = 3;
 
 const CHECKIN_HEADERS = [
   'Timestamp',
@@ -977,8 +978,11 @@ function saveCheckin(data) {
   const startMinutes = timeToMinutes(startTime);
 
   const isLate = currentMinutes > startMinutes;
+  const existingLatePermission = isLate
+    ? findLatePermissionForCheckin(phone, name, getBangkokDateKey(now))
+    : null;
 
-  if (isLate && !data.reason && !data.submitWithoutReason) {
+  if (isLate && !existingLatePermission && !data.reason && !data.submitWithoutReason) {
     return {
       success: false,
       requireLateReason: true,
@@ -991,19 +995,27 @@ function saveCheckin(data) {
   let lateReason = '-';
   let timeStatusCode = 'normal';
   let approvalStatusCode = 'none';
+  let approver = '';
+  let approvalTime = '';
+  let approvalNote = '';
 
   if (isLate) {
     timeStatus = '🔴 มาสาย';
     timeStatusCode = 'late';
 
-    if (data.reason) {
-      approvalStatus = '🟡 รออนุมัติ';
-      approvalStatusCode = 'pending';
-      lateReason = String(data.reason).trim();
+    const latePermission = existingLatePermission;
+
+    if (latePermission) {
+      approvalStatus = latePermission.approvalStatus || '🟡 รออนุมัติ';
+      approvalStatusCode = getApprovalStatusCode(approvalStatus) || getPermissionApprovalStatusCode(approvalStatus);
+      lateReason = latePermission.reason || String(data.reason || '').trim() || 'ขอมาสายล่วงหน้า';
+      approver = latePermission.approver || '';
+      approvalTime = latePermission.approvalTime || '';
+      approvalNote = latePermission.approvalNote || '';
     } else {
       approvalStatus = '🔴 มาสายโดยไม่ได้ขอ';
       approvalStatusCode = 'unrequested';
-      lateReason = 'ไม่ได้ระบุเหตุผล';
+      lateReason = String(data.reason || '').trim() || 'ไม่ได้ระบุเหตุผล';
     }
   }
 
@@ -1022,9 +1034,9 @@ function saveCheckin(data) {
     timeStatus,
     approvalStatus,
     lateReason,
-    '',
-    '',
-    '',
+    approver,
+    approvalTime,
+    approvalNote,
     timeStatusCode,
     approvalStatusCode
   ]);
@@ -1074,6 +1086,7 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 
 function getDashboardData() {
   initializeSheets();
+  runAutoApprovePendingLatePermissionsSafely();
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const checkSheet = ss.getSheetByName(CHECKIN_SHEET);
@@ -1201,7 +1214,7 @@ function getDashboardData() {
         pending++;
       }
 
-      if (approvalStatus.includes('อนุมัติแล้ว')) {
+      if (approvalStatus.includes('อนุมัติแล้ว') || approvalStatus.includes('อนุมัติอัตโนมัติ')) {
         approved++;
       }
 
@@ -1247,6 +1260,7 @@ function getDashboardData() {
 }
 function getAttendanceReport(filters) {
   initializeSheets();
+  runAutoApprovePendingLatePermissionsSafely();
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(CHECKIN_SHEET);
@@ -1896,6 +1910,30 @@ function removeTomorrowPermissionLineTriggers() {
   });
 }
 
+function installLateAutoApproveTrigger() {
+  removeLateAutoApproveTriggers();
+
+  ScriptApp.newTrigger('autoApprovePendingLatePermissions')
+    .timeBased()
+    .everyMinutes(30)
+    .create();
+
+  return {
+    success: true,
+    message: 'ตั้งค่าอนุมัติมาสายอัตโนมัติทุก 30 นาทีแล้ว'
+  };
+}
+
+function removeLateAutoApproveTriggers() {
+  const triggers = ScriptApp.getProjectTriggers();
+
+  triggers.forEach((trigger) => {
+    if (trigger.getHandlerFunction() === 'autoApprovePendingLatePermissions') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+}
+
 function logPdfReport(reportDate, status, fileName, fileUrl, message) {
   initializeSheets();
 
@@ -2179,6 +2217,10 @@ function getApprovalStatusCode(status) {
     return 'unrequested';
   }
 
+  if (text.includes('อนุมัติอัตโนมัติ')) {
+    return 'auto_approved';
+  }
+
   if (text.includes('รออนุมัติ')) {
     return 'pending';
   }
@@ -2335,7 +2377,11 @@ function matchesReportStatus(filterStatus, timeStatus, approvalStatus) {
   }
 
   if (filterStatus === 'approved') {
-    return approvalText.includes('อนุมัติแล้ว');
+    return approvalText.includes('อนุมัติแล้ว') || approvalText.includes('อนุมัติอัตโนมัติ');
+  }
+
+  if (filterStatus === 'auto_approved') {
+    return approvalText.includes('อนุมัติอัตโนมัติ');
   }
 
   if (filterStatus === 'rejected') {
@@ -2386,7 +2432,7 @@ function buildReportSummary(rows) {
       summary.pending++;
     }
 
-    if (approvalStatus.includes('อนุมัติแล้ว')) {
+    if (approvalStatus.includes('อนุมัติแล้ว') || approvalStatus.includes('อนุมัติอัตโนมัติ')) {
       summary.approved++;
     }
 
@@ -2420,6 +2466,23 @@ function formatDateTimeValue(value) {
   }
 
   return String(value);
+}
+
+function parseCheckinDateTime(dateValue, timeValue) {
+  const dateKey = getBangkokDateKey(dateValue);
+  const timeText = formatTimeValue(timeValue, '');
+
+  if (!dateKey || !timeText) {
+    return null;
+  }
+
+  const parsed = new Date(dateKey + 'T' + timeText + '+07:00');
+
+  if (isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
 }
 
 function escapeCsvValue(value) {
@@ -2651,7 +2714,7 @@ function findActivePermissionRequest(sheet, phone, name, requestDate) {
       continue;
     }
 
-    if (approvalStatus.includes('รออนุมัติ') || approvalStatus.includes('อนุมัติแล้ว')) {
+    if (approvalStatus.includes('รออนุมัติ') || approvalStatus.includes('อนุมัติแล้ว') || approvalStatus.includes('อนุมัติอัตโนมัติ')) {
       return {
         rowNumber: i + 2,
         requestType: String(row[5] || '-'),
@@ -2661,6 +2724,100 @@ function findActivePermissionRequest(sheet, phone, name, requestDate) {
   }
 
   return null;
+}
+
+function findLatePermissionForCheckin(phone, name, requestDate) {
+  const sheet = getPermissionRequestsSheet();
+
+  if (!sheet || sheet.getLastRow() < 2) {
+    return null;
+  }
+
+  const targetPhone = normalizePhone(phone);
+  const targetName = normalizeName(name);
+  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, PERMISSION_REQUEST_HEADERS.length).getValues();
+
+  for (let i = values.length - 1; i >= 0; i--) {
+    const row = values[i];
+    const requestType = normalizePermissionRequestType(row[5]);
+    const rowPhone = normalizePhone(row[3]);
+    const rowName = normalizeName(row[2]);
+    const rowDate = getBangkokDateKey(row[6]);
+    const isSamePerson = targetPhone
+      ? rowPhone === targetPhone
+      : rowName === targetName;
+
+    if (!isSamePerson || rowDate !== requestDate || requestType !== 'มาสาย') {
+      continue;
+    }
+
+    return {
+      rowNumber: i + 2,
+      requestId: String(row[0] || ''),
+      approvalStatus: String(row[9] || '🟡 รออนุมัติ'),
+      approvalStatusCode: String(row[13] || getPermissionApprovalStatusCode(row[9])),
+      approver: String(row[10] || ''),
+      approvalTime: formatDateTimeValue(row[11]),
+      approvalNote: String(row[12] || ''),
+      expectedTime: formatLineTime(row[7]),
+      reason: String(row[8] || '')
+    };
+  }
+
+  return null;
+}
+
+function findLateCheckinRowForPermission(checkSheet, permissionRow) {
+  if (!checkSheet || checkSheet.getLastRow() < 2 || !permissionRow) {
+    return null;
+  }
+
+  const targetPhone = normalizePhone(permissionRow[3]);
+  const targetName = normalizeName(permissionRow[2]);
+  const targetDate = getBangkokDateKey(permissionRow[6]);
+  const values = checkSheet.getRange(2, 1, checkSheet.getLastRow() - 1, Math.max(checkSheet.getLastColumn(), 17)).getValues();
+
+  for (let i = values.length - 1; i >= 0; i--) {
+    const row = values[i];
+    const rowPhone = normalizePhone(row[2]);
+    const rowName = normalizeName(row[1]);
+    const rowDate = getBangkokDateKey(row[0]);
+    const timeStatus = normalizeStatusText(row[9]);
+    const isSamePerson = targetPhone
+      ? rowPhone === targetPhone
+      : rowName === targetName;
+
+    if (isSamePerson && rowDate === targetDate && timeStatus.includes('มาสาย')) {
+      return {
+        rowNumber: i + 2,
+        rowData: row
+      };
+    }
+  }
+
+  return null;
+}
+
+function syncLateCheckinApprovalFromPermission(permissionRow, approvalStatus, approverName, approvalTime, note) {
+  if (!permissionRow || normalizePermissionRequestType(permissionRow[5]) !== 'มาสาย') {
+    return false;
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const checkSheet = ss.getSheetByName(CHECKIN_SHEET);
+  const checkin = findLateCheckinRowForPermission(checkSheet, permissionRow);
+
+  if (!checkin) {
+    return false;
+  }
+
+  checkSheet.getRange(checkin.rowNumber, 11).setValue(approvalStatus);
+  checkSheet.getRange(checkin.rowNumber, 13).setValue(String(approverName || 'ผู้บริหาร'));
+  checkSheet.getRange(checkin.rowNumber, 14).setValue(approvalTime);
+  checkSheet.getRange(checkin.rowNumber, 15).setValue(String(note || '-'));
+  checkSheet.getRange(checkin.rowNumber, 17).setValue(getApprovalStatusCode(approvalStatus));
+
+  return true;
 }
 
 function countLeaveRequestsForPerson(sheet, phone, name, requestDate) {
@@ -2874,6 +3031,7 @@ function submitLatePermissionRequest(data) {
 
 function getPendingPermissionRequests() {
   initializeSheets();
+  runAutoApprovePendingLatePermissionsSafely();
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = getPermissionRequestsSheet();
@@ -3360,6 +3518,7 @@ function updatePermissionRequestApproval(requestId, newStatus, approverName, not
 
     let rowData = sheet.getRange(targetRow, 1, 1, PERMISSION_REQUEST_HEADERS.length).getValues()[0];
     let leavePdf = null;
+    syncLateCheckinApprovalFromPermission(rowData, newStatus, approverName || 'ผู้บริหาร', approvalTime, note || '-');
 
     if (statusCode === 'approved' && isLeavePermissionType(rowData[5])) {
       try {
@@ -3417,6 +3576,98 @@ function approvePermissionRequest(requestId, approverName, note) {
 
 function rejectPermissionRequest(requestId, approverName, note) {
   return updatePermissionRequestApproval(requestId, '🔴 ไม่อนุมัติ', approverName, note);
+}
+
+function runAutoApprovePendingLatePermissionsSafely() {
+  try {
+    autoApprovePendingLatePermissions();
+  } catch (err) {
+    Logger.log('Auto approve late permissions skipped: ' + (err && err.message ? err.message : err));
+  }
+}
+
+function autoApprovePendingLatePermissions() {
+  initializeSheets();
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const permissionSheet = getPermissionRequestsSheet();
+    const checkSheet = ss.getSheetByName(CHECKIN_SHEET);
+
+    if (!permissionSheet || permissionSheet.getLastRow() < 2 || !checkSheet || checkSheet.getLastRow() < 2) {
+      return { success: true, updated: 0 };
+    }
+
+    const now = new Date();
+    const values = permissionSheet.getRange(2, 1, permissionSheet.getLastRow() - 1, PERMISSION_REQUEST_HEADERS.length).getValues();
+    const approvalStatus = '🟢 อนุมัติอัตโนมัติ';
+    const approver = 'ระบบ';
+    const note = 'อนุมัติอัตโนมัติหลังเช็คอินครบ ' + LATE_AUTO_APPROVE_HOURS + ' ชั่วโมง';
+    const approvalTime = Utilities.formatDate(now, 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss');
+    let updated = 0;
+
+    values.forEach((row, index) => {
+      const requestType = normalizePermissionRequestType(row[5]);
+      const currentStatus = normalizeStatusText(row[9]);
+
+      if (requestType !== 'มาสาย' || !currentStatus.includes('รออนุมัติ')) {
+        return;
+      }
+
+      const checkin = findLateCheckinRowForPermission(checkSheet, row);
+
+      if (!checkin) {
+        return;
+      }
+
+      const checkinAt = parseCheckinDateTime(checkin.rowData[0], checkin.rowData[7]);
+
+      if (!checkinAt || now.getTime() - checkinAt.getTime() < LATE_AUTO_APPROVE_HOURS * 60 * 60 * 1000) {
+        return;
+      }
+
+      const targetRow = index + 2;
+      permissionSheet.getRange(targetRow, 10).setValue(approvalStatus);
+      permissionSheet.getRange(targetRow, 11).setValue(approver);
+      permissionSheet.getRange(targetRow, 12).setValue(approvalTime);
+      permissionSheet.getRange(targetRow, 13).setValue(note);
+      permissionSheet.getRange(targetRow, 14).setValue('auto_approved');
+
+      checkSheet.getRange(checkin.rowNumber, 11).setValue(approvalStatus);
+      checkSheet.getRange(checkin.rowNumber, 13).setValue(approver);
+      checkSheet.getRange(checkin.rowNumber, 14).setValue(approvalTime);
+      checkSheet.getRange(checkin.rowNumber, 15).setValue(note);
+      checkSheet.getRange(checkin.rowNumber, 17).setValue('auto_approved');
+
+      updated++;
+
+      try {
+        notifyLinePermissionApproval({
+          requestId: row[0],
+          name: row[2],
+          position: row[4],
+          requestType: row[5],
+          requestDate: row[6],
+          expectedTime: row[7],
+          reason: row[8],
+          approvalStatus: approvalStatus,
+          approver: approver,
+          approvalNote: note,
+          approvalTime: approvalTime
+        });
+      } catch (notifyErr) {
+        Logger.log('Auto approve LINE notify failed: ' + (notifyErr && notifyErr.message ? notifyErr.message : notifyErr));
+      }
+    });
+
+    SpreadsheetApp.flush();
+    return { success: true, updated: updated };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function createLeavePdf(requestId) {
@@ -3598,6 +3849,7 @@ function createLeavePdfForRow(rowData) {
 function getPermissionApprovalStatusCode(status) {
   const text = normalizeStatusText(status);
 
+  if (text.includes('อนุมัติอัตโนมัติ')) return 'auto_approved';
   if (text.includes('อนุมัติแล้ว')) return 'approved';
   if (text.includes('ไม่อนุมัติ')) return 'rejected';
   return 'pending';
@@ -3685,8 +3937,9 @@ function notifyLinePermissionRequest(data) {
 function notifyLinePermissionApproval(data) {
   data = data || {};
   const requestType = normalizePermissionRequestType(data.requestType || 'มาสาย') || 'มาสาย';
-  const approved = getPermissionApprovalStatusCode(data.approvalStatus) === 'approved';
-  const title = approved ? 'อนุมัติแล้ว' : 'ไม่อนุมัติ';
+  const statusCode = getPermissionApprovalStatusCode(data.approvalStatus);
+  const approved = statusCode === 'approved' || statusCode === 'auto_approved';
+  const title = statusCode === 'auto_approved' ? 'อนุมัติอัตโนมัติ' : (approved ? 'อนุมัติแล้ว' : 'ไม่อนุมัติ');
   const lines = [];
 
   if (isLeavePermissionType(requestType)) {
@@ -3855,7 +4108,10 @@ function notifyLineCheckin(data) {
   data = data || {};
   const timeStatus = cleanStatusForReport(data.timeStatus);
   const isLate = normalizeStatusText(timeStatus).includes('มาสาย');
-  const title = isLate ? 'มาสาย' : 'ลงเวลาแล้ว';
+  const approvalText = normalizeStatusText(data.approvalStatus);
+  const title = approvalText.includes('มาสายโดยไม่ได้ขอ')
+    ? 'มาสายโดยไม่ได้ขอ'
+    : (isLate ? 'มาสาย' : 'ลงเวลาแล้ว');
   const lines = [
     'เวลาเข้า: ' + formatLineTime(data.checkinTime),
     'สถานะ: ' + timeStatus
@@ -3878,8 +4134,9 @@ function notifyLineCheckin(data) {
 
 function notifyLineApproval(data) {
   data = data || {};
-  const approved = getApprovalStatusCode(data.approvalStatus) === 'approved';
-  const title = approved ? 'อนุมัติมาสาย' : 'ไม่อนุมัติ';
+  const statusCode = getApprovalStatusCode(data.approvalStatus);
+  const approved = statusCode === 'approved' || statusCode === 'auto_approved';
+  const title = statusCode === 'auto_approved' ? 'อนุมัติมาสายอัตโนมัติ' : (approved ? 'อนุมัติมาสาย' : 'ไม่อนุมัติ');
   const lines = [
     'เวลาเข้า: ' + formatLineTime(data.checkinTime),
     'เหตุผล: ' + String(data.reason || '-'),
@@ -4731,6 +4988,7 @@ function padTimePart(value) {
 
 function getPendingLateRequests() {
   initializeSheets();
+  runAutoApprovePendingLatePermissionsSafely();
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(CHECKIN_SHEET);

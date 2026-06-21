@@ -67,6 +67,53 @@
       box-shadow: 0 10px 24px rgba(15,23,42,0.08);
     }
 
+    .dashboard-kpi {
+      min-height: 110px;
+      border-left: 5px solid var(--kpi-accent);
+      background: #ffffff;
+      color: #172033;
+      box-shadow: 0 10px 24px rgba(15,23,42,0.07);
+    }
+
+    .dashboard-kpi-value {
+      color: var(--kpi-accent);
+      font-size: 32px;
+      line-height: 1;
+      font-weight: 800;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.65fr) minmax(320px, 0.95fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .approval-row-card {
+      border: 1px solid rgba(226,232,240,0.95);
+      background: #ffffff;
+      box-shadow: 0 6px 18px rgba(15,23,42,0.04);
+    }
+
+    .dashboard-section-title {
+      color: #0f172a;
+      font-size: 20px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+
+    .quiet-chip {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 8px;
+      border: 1px solid #bae6fd;
+      background: #e0f2fe;
+      color: #075985;
+      padding: 7px 11px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
     .compact-approval-card {
       border: 1px solid rgba(245,158,11,0.26);
       background:
@@ -219,6 +266,50 @@
         animation: none;
       }
     }
+
+    @media (max-width: 1024px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 0 !important;
+      }
+
+      .top-bar {
+        border-radius: 0 !important;
+        position: sticky;
+        top: 0;
+        z-index: 20;
+      }
+
+      .nav-btn,
+      .refresh-btn {
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+
+      .dashboard-kpi {
+        min-height: 92px;
+      }
+
+      .dashboard-kpi-value {
+        font-size: 28px;
+      }
+
+      .page-card {
+        border-radius: 12px;
+      }
+
+      .status-badge,
+      .status-pill,
+      .quiet-chip,
+      .absent-name-badge {
+        white-space: normal;
+      }
+    }
     .app-footer {
       color: #374151;
       font-size: 12px;
@@ -257,129 +348,166 @@
     </div>
 
     <section id="view-dashboard">
-      <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 mb-4">
-        <div class="metric-card rounded-xl p-3 text-white bg-gradient-to-br from-slate-700 to-slate-900">
-          <div class="text-xs opacity-85">บุคลากรทั้งหมด</div>
-          <div id="total-active" class="text-2xl font-bold leading-tight mt-1">0</div>
+      <div class="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div class="text-sm font-semibold text-slate-500">ภาพรวมวันนี้</div>
+          <div class="text-xs text-slate-400">จัดลำดับงานที่ต้องดำเนินการก่อน แล้วค่อยดูภาพรวมและรายชื่อ</div>
+        </div>
+        <div class="text-xs text-slate-500">ข้อมูลอัปเดตจาก Google Sheets</div>
+      </div>
+
+      <div class="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+        <div class="dashboard-kpi rounded-xl p-4" style="--kpi-accent:#991b1b">
+          <div class="text-xs font-bold text-slate-500">บุคลากรทั้งหมด</div>
+          <div id="total-active" class="dashboard-kpi-value mt-3">0</div>
+          <div class="text-xs text-slate-400 mt-2">บัญชี active ทั้งหมด</div>
         </div>
 
-        <div class="metric-card rounded-xl p-3 text-white bg-gradient-to-br from-emerald-500 to-emerald-700">
-          <div class="text-xs opacity-90">มาปฏิบัติงาน</div>
-          <div id="checked-in" class="text-2xl font-bold leading-tight mt-1">0</div>
+        <div class="dashboard-kpi rounded-xl p-4" style="--kpi-accent:#059669">
+          <div class="text-xs font-bold text-slate-500">มาแล้ว</div>
+          <div id="checked-in" class="dashboard-kpi-value mt-3">0</div>
+          <div class="text-xs text-slate-400 mt-2">มีรายการลงเวลาวันนี้</div>
         </div>
 
-        <div class="metric-card rounded-xl p-3 text-white bg-gradient-to-br from-sky-500 to-cyan-700">
-          <div class="text-xs opacity-90">ไม่ต้องลงเวลา</div>
-          <div id="no-check-total" class="text-2xl font-bold leading-tight mt-1">0</div>
+        <div class="dashboard-kpi rounded-xl p-4" style="--kpi-accent:#d97706">
+          <div class="text-xs font-bold text-slate-500">ยังไม่ลงเวลา</div>
+          <div id="absent" class="dashboard-kpi-value mt-3">0</div>
+          <div class="text-xs text-slate-400 mt-2">ยังไม่มีรายการลงเวลา</div>
         </div>
 
-        <div class="metric-card rounded-xl p-3 text-white bg-gradient-to-br from-slate-400 to-slate-600">
-          <div class="text-xs opacity-95">ยังไม่ลงเวลา</div>
-          <div id="absent" class="text-2xl font-bold leading-tight mt-1">0</div>
-        </div>
-
-        <div class="metric-card rounded-xl p-3 text-white bg-gradient-to-br from-teal-500 to-emerald-700">
-          <div class="text-xs opacity-90">มาปกติ</div>
-          <div id="normal" class="text-2xl font-bold leading-tight mt-1">0</div>
-        </div>
-
-        <div class="metric-card rounded-xl p-3 text-white bg-gradient-to-br from-rose-500 to-red-700">
-          <div class="text-xs opacity-90">มาสาย</div>
-          <div id="late" class="text-2xl font-bold leading-tight mt-1">0</div>
-        </div>
-
-        <div class="metric-card rounded-xl p-3 text-white bg-gradient-to-br from-amber-400 to-orange-600">
-          <div class="text-xs opacity-95">รออนุมัติ</div>
-          <div id="pending" class="text-2xl font-bold leading-tight mt-1">0</div>
+        <div class="dashboard-kpi rounded-xl p-4" style="--kpi-accent:#dc2626">
+          <div class="text-xs font-bold text-slate-500">รออนุมัติ</div>
+          <div id="pending" class="dashboard-kpi-value mt-3">0</div>
+          <div class="text-xs text-slate-400 mt-2">ต้องดำเนินการ</div>
         </div>
       </div>
 
-      <div class="page-card rounded-xl p-3 mb-4 border-l-4 border-amber-400">
-        <div class="flex flex-col md:flex-row md:items-center gap-2 md:justify-between">
-          <div>
-            <div class="font-bold text-slate-900">ยังไม่ลงเวลา</div>
-            <div class="text-xs text-slate-500">รายชื่อบุคลากร active ที่ยังไม่มีรายการลงเวลาวันนี้</div>
-          </div>
-          <div id="absent-count-pill" class="status-pill bg-amber-100 text-amber-800 self-start md:self-auto">0 คน</div>
+      <div class="dashboard-grid">
+        <div class="space-y-4">
+          <section class="page-card rounded-xl p-4">
+            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between mb-4">
+              <div>
+                <h2 class="dashboard-section-title">ต้องดำเนินการ</h2>
+                <div class="text-xs text-slate-500 mt-1">คำขอที่รอผู้บริหารพิจารณา แยกตามประเภทงาน</div>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <div id="permission-count" class="status-pill bg-amber-100 text-amber-800">0 รายการ</div>
+                <div id="pending-count" class="status-pill bg-amber-100 text-amber-800">0 รายการ</div>
+              </div>
+            </div>
+
+            <div class="flex gap-2 overflow-x-auto border-b border-slate-100 pb-3 mb-4 text-sm">
+              <span class="quiet-chip">ทั้งหมด</span>
+              <span class="quiet-chip" style="background:#fff7ed;border-color:#fed7aa;color:#c2410c;">มาสาย</span>
+              <span class="quiet-chip" style="background:#fdf2f8;border-color:#fbcfe8;color:#be185d;">ลาป่วย</span>
+              <span class="quiet-chip" style="background:#f5f3ff;border-color:#ddd6fe;color:#6d28d9;">ลากิจ</span>
+              <span class="quiet-chip">ไปราชการ</span>
+            </div>
+
+            <div class="mb-5">
+              <div class="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h3 class="font-bold text-slate-900">คำขออนุญาตรออนุมัติ</h3>
+                  <div class="text-xs text-slate-500">ลา มาสาย และไปราชการ</div>
+                </div>
+              </div>
+              <div id="pending-permission-list" class="space-y-3">
+                กำลังโหลด...
+              </div>
+            </div>
+
+            <div class="border-t border-slate-100 pt-4">
+              <div class="mb-3">
+                <h3 class="font-bold text-slate-900">รายการมาสายรออนุมัติ</h3>
+                <div class="text-xs text-slate-500">ตรวจเหตุผลการมาสายและอัปเดตสถานะ</div>
+              </div>
+
+              <div id="pending-late-list" class="space-y-3">
+                กำลังโหลด...
+              </div>
+            </div>
+          </section>
+
+          <section class="page-card rounded-xl p-4">
+            <div class="flex flex-col md:flex-row md:items-center gap-2 md:justify-between mb-3">
+              <div>
+                <h2 class="dashboard-section-title">ยังไม่ลงเวลา</h2>
+                <div class="text-xs text-slate-500 mt-1">รายชื่อบุคลากร active ที่ยังไม่มีรายการลงเวลาวันนี้</div>
+              </div>
+              <div id="absent-count-pill" class="status-pill bg-blue-100 text-blue-800 self-start md:self-auto">0 คน</div>
+            </div>
+            <div id="absent-name-list" class="flex flex-wrap gap-2 text-sm">
+              กำลังโหลด...
+            </div>
+          </section>
+
+          <details class="page-card rounded-xl p-4">
+            <summary class="cursor-pointer list-none">
+              <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                <div>
+                  <h2 class="dashboard-section-title">ไม่ต้องลงเวลา</h2>
+                  <div class="text-xs text-slate-500 mt-1">นับจากคำขอที่อนุมัติแล้วของวันนี้ กดเพื่อดูรายชื่อ</div>
+                </div>
+                <div class="flex flex-wrap gap-2 text-sm">
+                  <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-violet-800 font-semibold">
+                    ลาป่วย <b id="sick-leave-count" class="ml-1">0</b> คน
+                  </span>
+                  <span class="inline-flex items-center rounded-full border border-fuchsia-200 bg-fuchsia-50 px-3 py-1 text-fuchsia-800 font-semibold">
+                    ลากิจ <b id="personal-leave-count" class="ml-1">0</b> คน
+                  </span>
+                  <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-sky-800 font-semibold">
+                    ไปราชการ <b id="official-duty-count" class="ml-1">0</b> คน
+                  </span>
+                  <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-700 font-semibold">
+                    รวม <b id="no-check-total" class="ml-1">0</b> คน
+                  </span>
+                </div>
+              </div>
+            </summary>
+            <div id="no-check-name-list" class="flex flex-wrap gap-2 mt-4 text-sm">
+              ไม่มีรายการ
+            </div>
+          </details>
         </div>
-        <div id="absent-name-list" class="flex flex-wrap gap-2 mt-3 text-sm">
-          กำลังโหลด...
-        </div>
-      </div>
 
-
-      <div class="page-card rounded-xl p-3 mb-4 border-l-4 border-sky-400">
-        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-          <div>
-            <div class="font-bold text-slate-900">ไม่ต้องลงเวลา</div>
-            <div class="text-xs text-slate-500">นับจากคำขอที่อนุมัติแล้วของวันนี้</div>
-          </div>
-          <div class="flex flex-wrap gap-2 text-sm">
-            <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-violet-800 font-semibold">
-              ลาป่วย <b id="sick-leave-count" class="ml-1">0</b> คน
-            </span>
-            <span class="inline-flex items-center rounded-full border border-fuchsia-200 bg-fuchsia-50 px-3 py-1 text-fuchsia-800 font-semibold">
-              ลากิจ <b id="personal-leave-count" class="ml-1">0</b> คน
-            </span>
-            <span class="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-sky-800 font-semibold">
-              ไปราชการ <b id="official-duty-count" class="ml-1">0</b> คน
-            </span>
-          </div>
-        </div>
-        <div id="no-check-name-list" class="flex flex-wrap gap-2 mt-3 text-sm">
-          ไม่มีรายการ
-        </div>
-      </div>
-      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
-        <section class="page-card rounded-xl p-4">
-          <div class="flex items-center justify-between gap-3 mb-4">
-            <div>
-              <h2 class="text-lg font-bold text-slate-900">คำขออนุญาตรออนุมัติ</h2>
-              <div class="text-xs text-slate-500">มาสาย ลา และไปราชการ ส่งคำขอได้โดยไม่ต้องตรวจ GPS</div>
+        <aside class="space-y-4">
+          <section class="page-card rounded-xl p-4">
+            <div class="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <h2 class="dashboard-section-title">สรุปวันนี้</h2>
+                <div class="text-xs text-slate-500 mt-1">ภาพรวมการลงเวลาและการอนุมัติ</div>
+              </div>
             </div>
-            <div id="permission-count" class="status-pill bg-amber-100 text-amber-800">0 รายการ</div>
-          </div>
 
-          <div id="pending-permission-list" class="space-y-3 mb-5">
-            กำลังโหลด...
-          </div>
-
-          <div class="border-t border-slate-100 pt-4 mb-4"></div>
-          <div class="flex items-center justify-between gap-3 mb-4">
-            <div>
-              <h2 class="text-lg font-bold text-slate-900">รายการรออนุมัติ</h2>
-              <div class="text-xs text-slate-500">ตรวจเหตุผลการมาสายและอัปเดตสถานะ</div>
+            <div class="grid grid-cols-2 gap-3 text-sm mb-4">
+              <div class="bg-emerald-50 border border-emerald-100 rounded-xl p-3 min-h-20">
+                <div class="text-emerald-700 font-semibold">มาปกติ</div>
+                <div id="normal" class="text-2xl font-bold text-emerald-800 leading-tight mt-1">0</div>
+              </div>
+              <div class="bg-rose-50 border border-rose-100 rounded-xl p-3 min-h-20">
+                <div class="text-rose-700 font-semibold">มาสาย</div>
+                <div id="late" class="text-2xl font-bold text-rose-800 leading-tight mt-1">0</div>
+              </div>
             </div>
-            <div id="pending-count" class="status-pill bg-amber-100 text-amber-800">0 รายการ</div>
-          </div>
 
-          <div id="pending-late-list" class="space-y-3">
-            กำลังโหลด...
-          </div>
-        </section>
-
-        <aside class="page-card rounded-xl p-4">
-          <div class="flex items-center justify-between gap-3 mb-3">
-            <div>
-              <h2 class="text-lg font-bold text-slate-900">กราฟสถานะ</h2>
-              <div class="text-xs text-slate-500">ภาพรวมการอนุมัติและสถานะเวลา</div>
+            <div class="h-56 md:h-64">
+              <canvas id="myChart"></canvas>
             </div>
-          </div>
+          </section>
 
-          <div class="grid grid-cols-2 gap-3 text-sm mb-3">
-            <div class="bg-emerald-50 border border-emerald-100 rounded-xl p-3 min-h-20">
-              <div class="text-emerald-700 font-semibold">อนุมัติแล้ว</div>
-              <div id="approved" class="text-2xl font-bold text-emerald-800 leading-tight mt-1">0</div>
+          <section class="page-card rounded-xl p-4">
+            <h2 class="dashboard-section-title mb-3">การอนุมัติรวม</h2>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div class="bg-emerald-50 border border-emerald-100 rounded-xl p-3 min-h-20">
+                <div class="text-emerald-700 font-semibold">อนุมัติแล้ว</div>
+                <div id="approved" class="text-2xl font-bold text-emerald-800 leading-tight mt-1">0</div>
+              </div>
+              <div class="bg-rose-50 border border-rose-100 rounded-xl p-3 min-h-20">
+                <div class="text-rose-700 font-semibold">ไม่อนุมัติ</div>
+                <div id="rejected" class="text-2xl font-bold text-rose-800 leading-tight mt-1">0</div>
+              </div>
             </div>
-            <div class="bg-rose-50 border border-rose-100 rounded-xl p-3 min-h-20">
-              <div class="text-rose-700 font-semibold">ไม่อนุมัติ</div>
-              <div id="rejected" class="text-2xl font-bold text-rose-800 leading-tight mt-1">0</div>
-            </div>
-          </div>
-
-          <div class="h-64 xl:h-72">
-            <canvas id="myChart"></canvas>
-          </div>
+          </section>
         </aside>
       </div>
     </section>
@@ -389,7 +517,7 @@
         <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><h2 class="text-lg font-bold">ประวัติการปฏิบัติงาน</h2>
           <div class="text-xs text-gray-500">แสดงผลวันละ 1 ตาราง เลือกวันที่และตัวกรองที่ต้องการ</div></div><button onclick="createMonthlyCombinedPdf()" class="bg-red-700 text-white px-4 py-2 rounded-lg text-sm whitespace-nowrap shadow-sm">PDF รวมเดือน</button></div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[160px_160px_minmax(140px,1fr)_minmax(140px,1fr)_300px] gap-2 items-end">
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[170px_170px_minmax(150px,1fr)_minmax(150px,1fr)_280px] gap-2 items-end">
           <label class="block">
             <span class="text-xs text-gray-600">วันที่</span>
             <input id="report-date" type="date" class="w-full border rounded-lg px-3 py-2 mt-1 text-sm">
@@ -415,6 +543,7 @@
               <option value="late">มาสาย</option>
               <option value="pending">รออนุมัติ</option>
               <option value="approved">อนุมัติแล้ว</option>
+              <option value="auto_approved">อนุมัติอัตโนมัติ</option>
               <option value="rejected">ไม่อนุมัติ</option>
               <option value="unrequested">มาสายโดยไม่ได้ขอ</option>
               <option value="leave">ลา</option>
@@ -423,8 +552,8 @@
           </label>
 
           <div class="grid grid-cols-3 gap-2">
-            <button onclick="loadReport()" class="bg-slate-800 text-white px-3 py-2 rounded-lg text-sm whitespace-nowrap">
-              ค้นหา
+            <button onclick="resetReportFilters()" class="bg-slate-800 text-white px-3 py-2 rounded-lg text-sm whitespace-nowrap">
+              รีเซ็ต
             </button>
             <button onclick="exportReport()" class="bg-green-700 text-white px-3 py-2 rounded-lg text-sm whitespace-nowrap">
               Export
@@ -633,7 +762,7 @@
           </button>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-7 gap-2 mb-4">
+        <div class="grid grid-cols-1 md:grid-cols-8 gap-2 mb-4">
           <button onclick="runAdminTool('check')" class="bg-slate-700 text-white px-4 py-2 rounded-lg">
             ตรวจโครงชีต
           </button>
@@ -651,6 +780,9 @@
           </button>
           <button onclick="runAdminTool('lineTomorrow')" class="bg-yellow-600 text-white px-4 py-2 rounded-lg">
             LINE 16:30
+          </button>
+          <button onclick="runAdminTool('lateAuto')" class="bg-cyan-700 text-white px-4 py-2 rounded-lg">
+            Auto มาสาย
           </button>
           <button onclick="runAdminTool('clear')" class="bg-red-700 text-white px-4 py-2 rounded-lg">
             ล้างข้อมูลทดสอบ
@@ -1027,7 +1159,7 @@ function renderPendingPermissionRequests(items) {
   }
 
   el.innerHTML = items.map((item) => `
-    <div class="compact-approval-card rounded-xl p-3 border-l-4 ${getPermissionBorderClass(item.requestType)}">
+    <div id="permission-card-${escapeAttribute(item.requestId)}" class="compact-approval-card rounded-xl p-3 border-l-4 ${getPermissionBorderClass(item.requestType)}">
       <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-2 mb-1">
@@ -1114,6 +1246,8 @@ function updatePermission(requestId, action) {
           ? `<br><span class="text-amber-700">สร้างใบลา PDF ไม่สำเร็จ: ${escapeHtml(res.leavePdfMessage)}</span>`
           : '';
 
+        markPendingPermissionResolved(requestId);
+
         Swal.fire({
           icon: 'success',
           title: 'สำเร็จ',
@@ -1121,7 +1255,6 @@ function updatePermission(requestId, action) {
         })
           .then(() => {
             loadDashboard();
-            loadPendingPermissionRequests();
           });
       })
       .withFailureHandler((err) => {
@@ -1151,6 +1284,11 @@ function setPermissionButtons(requestId, disabled) {
     rejectBtn.disabled = disabled;
     rejectBtn.innerHTML = disabled ? 'กำลังบันทึก...' : 'ไม่อนุมัติ';
   }
+}
+
+function markPendingPermissionResolved(requestId) {
+  removeApprovalCard(`permission-card-${requestId}`);
+  refreshPendingListCount('pending-permission-list', 'permission-count', 'ไม่มีคำขออนุญาตรออนุมัติ');
 }
 
 function formatPermissionDateRange(item) {
@@ -1193,7 +1331,7 @@ function renderPendingLateRequests(items) {
   }
 
   el.innerHTML = items.map((item) => `
-    <div class="compact-approval-card rounded-xl p-3">
+    <div id="late-card-${item.rowNumber}" class="compact-approval-card rounded-xl p-3">
       <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-2 mb-1">
@@ -1267,10 +1405,11 @@ function updateLate(rowNumber, action) {
           return;
         }
 
+        markPendingLateResolved(rowNumber);
+
         Swal.fire('สำเร็จ', `${res.approvalStatus || ''} ${res.approvalTime || ''}`, 'success')
           .then(() => {
             loadDashboard();
-            loadPendingLateRequests();
           });
       })
       .withFailureHandler((err) => {
@@ -1299,6 +1438,42 @@ function setApprovalButtons(rowNumber, disabled) {
   if (rejectBtn) {
     rejectBtn.disabled = disabled;
     rejectBtn.innerHTML = disabled ? 'กำลังบันทึก...' : 'ไม่อนุมัติ';
+  }
+}
+
+function markPendingLateResolved(rowNumber) {
+  removeApprovalCard(`late-card-${rowNumber}`);
+  refreshPendingListCount('pending-late-list', 'pending-count', 'ไม่มีรายการรออนุมัติ');
+}
+
+function removeApprovalCard(cardId) {
+  const card = document.getElementById(cardId);
+
+  if (card) {
+    card.remove();
+  }
+}
+
+function refreshPendingListCount(listId, countId, emptyMessage) {
+  const list = document.getElementById(listId);
+  const count = document.getElementById(countId);
+
+  if (!list) {
+    return;
+  }
+
+  const remaining = list.querySelectorAll('.compact-approval-card').length;
+
+  if (count) {
+    count.innerHTML = `${remaining} รายการ`;
+  }
+
+  if (remaining === 0) {
+    list.innerHTML = `
+      <div class="text-slate-500 border border-dashed rounded-xl p-6 text-center bg-slate-50">
+        ${escapeHtml(emptyMessage)}
+      </div>
+    `;
   }
 }
 
@@ -1566,6 +1741,28 @@ function getReportFilters() {
   };
 }
 
+function bindReportAutoFilters() {
+  ['report-date', 'report-position', 'report-status'].forEach((id) => {
+    const el = document.getElementById(id);
+
+    if (!el || el.dataset.autoReportBound === '1') {
+      return;
+    }
+
+    el.dataset.autoReportBound = '1';
+    el.addEventListener('change', () => {
+      loadReport();
+    });
+  });
+}
+
+function resetReportFilters() {
+  setDefaultReportDate();
+  document.getElementById('report-position').value = '';
+  document.getElementById('report-status').value = '';
+  loadReport();
+}
+
 function loadReport() {
   document.getElementById('report-table').innerHTML = 'กำลังโหลด...';
 
@@ -1825,6 +2022,8 @@ function runAdminTool(action) {
     backfill: 'เติม StatusCode',
     trigger: 'ติดตั้ง PDF อัตโนมัติ',
     lineMorning: 'ติดตั้ง LINE แจ้งเตือน 08:00',
+    lineTomorrow: 'ติดตั้ง LINE แจ้งเตือน 16:30',
+    lateAuto: 'ติดตั้งอนุมัติมาสายอัตโนมัติ',
     clear: 'ล้างข้อมูลทดสอบ'
   };
 
@@ -1872,6 +2071,11 @@ function runAdminTool(action) {
 
     if (action === 'lineTomorrow') {
       runner.installTomorrowPermissionLineTrigger();
+      return;
+    }
+
+    if (action === 'lateAuto') {
+      runner.installLateAutoApproveTrigger();
       return;
     }
 
@@ -2098,6 +2302,10 @@ function buildApprovalStatusBadge(value) {
     return `<span class="status-badge badge-unrequested">${escapeHtml(text)}</span>`;
   }
 
+  if (text.includes('อนุมัติอัตโนมัติ')) {
+    return `<span class="status-badge badge-approved">${escapeHtml(text)}</span>`;
+  }
+
   if (text.includes('รออนุมัติ')) {
     return `<span class="status-badge badge-pending">${escapeHtml(text)}</span>`;
   }
@@ -2216,6 +2424,7 @@ function getInitialView() {
 }
 
 setDefaultReportDate();
+bindReportAutoFilters();
 loadSettings(false);
 showView(getInitialView());
 
