@@ -734,6 +734,7 @@
           <span class="text-sm text-gray-600">เริ่มเลขที่ใบลา</span>
           <input id="setting-leave-doc-start-no" type="number" min="1" class="w-full border rounded-lg px-3 py-2 mt-1" placeholder="1">
         </label>
+
       </div>
 
       <div class="mt-5 max-w-xl">
@@ -762,7 +763,7 @@
           </button>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-8 gap-2 mb-4">
+        <div class="grid grid-cols-1 md:grid-cols-9 gap-2 mb-4">
           <button onclick="runAdminTool('check')" class="bg-slate-700 text-white px-4 py-2 rounded-lg">
             ตรวจโครงชีต
           </button>
@@ -776,10 +777,13 @@
             ติดตั้ง PDF 18:15
           </button>
           <button onclick="runAdminTool('lineMorning')" class="bg-sky-700 text-white px-4 py-2 rounded-lg">
-            LINE 08:00
+            LINE 08:15
           </button>
           <button onclick="runAdminTool('lineTomorrow')" class="bg-yellow-600 text-white px-4 py-2 rounded-lg">
             LINE 16:30
+          </button>
+          <button onclick="runAdminTool('lineTest')" class="bg-lime-700 text-white px-4 py-2 rounded-lg">
+            ทดสอบ LINE
           </button>
           <button onclick="runAdminTool('lateAuto')" class="bg-cyan-700 text-white px-4 py-2 rounded-lg">
             Auto มาสาย
@@ -2021,8 +2025,9 @@ function runAdminTool(action) {
     repair: 'ซ่อมหัวตาราง',
     backfill: 'เติม StatusCode',
     trigger: 'ติดตั้ง PDF อัตโนมัติ',
-    lineMorning: 'ติดตั้ง LINE แจ้งเตือน 08:00',
+    lineMorning: 'ติดตั้ง LINE แจ้งเตือน 08:15',
     lineTomorrow: 'ติดตั้ง LINE แจ้งเตือน 16:30',
+    lineTest: 'ทดสอบ LINE',
     lateAuto: 'ติดตั้งอนุมัติมาสายอัตโนมัติ',
     clear: 'ล้างข้อมูลทดสอบ'
   };
@@ -2071,6 +2076,11 @@ function runAdminTool(action) {
 
     if (action === 'lineTomorrow') {
       runner.installTomorrowPermissionLineTrigger();
+      return;
+    }
+
+    if (action === 'lineTest') {
+      runner.testLine();
       return;
     }
 

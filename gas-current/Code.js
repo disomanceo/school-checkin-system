@@ -13,6 +13,10 @@ const REPORT_TEMPLATE_DOC_ID = '1XFEiaz3xRKVVXqQFkXpGk_Ts7oxEajElQe4VRkKvql0';
 const LEAVE_TEMPLATE_DOC_ID = '1ZRMTGxVzPg4EtDn39lUaVDGin0I_xAuhTX9STH1bXqI';
 const REPORT_FOLDER_NAME = 'รายงานลงเวลาปฏิบัติงาน';
 const LATE_AUTO_APPROVE_HOURS = 3;
+const DIRECTOR_LINE_USER_IDS = [
+  'U15b7976bb7861d8c67cea2a8a1849664',
+  'U9a31bc04baa3496684f8612461a9db35'
+];
 
 const CHECKIN_HEADERS = [
   'Timestamp',
@@ -405,62 +409,68 @@ function include(filename) {
 }
 
 function doPost(e) {
-
   try {
-
     const data = JSON.parse(e.postData.contents);
+    logLineWebhookEvent(data);
+    handleLineWebhookEvents(data.events || []);
 
-    const groupId =
-      data.events[0].source.groupId;
+    return ContentService.createTextOutput('OK');
+  } catch(err) {
+    logLineError('WEBHOOK_ERROR', err.toString());
+    return ContentService.createTextOutput('ERROR');
+  }
+}
 
-    // บันทึกลงชีตแทน Logger
+function logLineWebhookEvent(data) {
+  try {
+    const event = data && data.events && data.events[0] ? data.events[0] : {};
+    const source = event.source || {};
+    const targetId = source.groupId || source.roomId || source.userId || '';
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-    let sheet =
-      ss.getSheetByName('LineLogs');
+    let sheet = ss.getSheetByName('LineLogs');
 
     if (!sheet) {
-
       sheet = ss.insertSheet('LineLogs');
-
-      sheet.appendRow([
-        'Time',
-        'Group ID',
-        'Raw JSON'
-      ]);
+      sheet.appendRow(['Time', 'Type', 'Detail']);
     }
 
     sheet.appendRow([
       new Date(),
-      groupId,
+      'WEBHOOK ' + targetId,
       JSON.stringify(data)
     ]);
+  } catch (err) {
+    // ไม่ให้ logging ทำให้ webhook ล้ม
+  }
+}
 
-    return ContentService
-      .createTextOutput('OK');
+function handleLineWebhookEvents(events) {
+  (events || []).forEach((event) => {
+    const message = event && event.message ? event.message : {};
 
-  } catch(err) {
-
-    const ss =
-      SpreadsheetApp.getActiveSpreadsheet();
-
-    let sheet =
-      ss.getSheetByName('LineLogs');
-
-    if (!sheet) {
-
-      sheet = ss.insertSheet('LineLogs');
+    if (event.type !== 'message' || message.type !== 'text') {
+      return;
     }
 
-    sheet.appendRow([
-      new Date(),
-      'ERROR',
-      err.toString()
-    ]);
+    const text = String(message.text || '').trim();
 
-    return ContentService
-      .createTextOutput('ERROR');
-  }
+    if (text !== 'สรุป' && text !== 'สรุปวันนี้') {
+      return;
+    }
+
+    const userId = String(event.source && event.source.userId || '').trim();
+
+    if (!canRequestLineSummary(userId)) {
+      return;
+    }
+
+    replyLineMessage(event.replyToken, buildMorningCheckinSummaryMessage());
+  });
+}
+
+function canRequestLineSummary(userId) {
+  const id = String(userId || '').trim();
+  return DIRECTOR_LINE_USER_IDS.indexOf(id) !== -1;
 }
 
 function registerUser(data) {
@@ -958,6 +968,17 @@ function saveCheckin(data) {
     };
   }
 
+  const approvedNoCheckPermission = findApprovedNoCheckPermissionForDate(phone, name, getBangkokDateKey(new Date()));
+
+  if (approvedNoCheckPermission) {
+    return {
+      success: false,
+      blockedByNoCheckPermission: true,
+      requestType: approvedNoCheckPermission.requestType,
+      message: 'วันนี้คุณมีรายการ' + approvedNoCheckPermission.requestType + 'ที่อนุมัติแล้ว ไม่ต้องลงเวลา'
+    };
+  }
+
   const distance = calculateDistance(
     schoolLat,
     schoolLng,
@@ -1041,17 +1062,19 @@ function saveCheckin(data) {
     approvalStatusCode
   ]);
 
-  notifyLineCheckin({
-    checkinDate: now,
-    name: name,
-    position: position,
-    checkinTime: checkinTime,
-    autoCheckoutTime: autoCheckoutTime,
-    timeStatus: timeStatus,
-    approvalStatus: approvalStatus,
-    lateReason: lateReason,
-    distance: Math.round(distance)
-  });
+  if (approvalStatusCode === 'unrequested') {
+    notifyLineCheckin({
+      checkinDate: now,
+      name: name,
+      position: position,
+      checkinTime: checkinTime,
+      autoCheckoutTime: autoCheckoutTime,
+      timeStatus: timeStatus,
+      approvalStatus: approvalStatus,
+      lateReason: lateReason,
+      distance: Math.round(distance)
+    });
+  }
 
   return {
   success: true,
@@ -1086,7 +1109,6 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 
 function getDashboardData() {
   initializeSheets();
-  runAutoApprovePendingLatePermissionsSafely();
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const checkSheet = ss.getSheetByName(CHECKIN_SHEET);
@@ -1260,7 +1282,6 @@ function getDashboardData() {
 }
 function getAttendanceReport(filters) {
   initializeSheets();
-  runAutoApprovePendingLatePermissionsSafely();
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(CHECKIN_SHEET);
@@ -1863,13 +1884,13 @@ function installMorningLineTrigger() {
     .timeBased()
     .everyDays(1)
     .atHour(8)
-    .nearMinute(0)
+    .nearMinute(15)
     .inTimezone('Asia/Bangkok')
     .create();
 
   return {
     success: true,
-    message: 'ตั้งค่าแจ้งเตือน LINE ช่วงเช้าทุกวันเวลาประมาณ 08:00 แล้ว'
+    message: 'ตั้งค่าแจ้งเตือน LINE สรุปหลังเวลาเข้าทุกวันเวลาประมาณ 08:15 แล้ว'
   };
 }
 
@@ -2767,6 +2788,54 @@ function findLatePermissionForCheckin(phone, name, requestDate) {
   return null;
 }
 
+function findApprovedNoCheckPermissionForDate(phone, name, dateKey) {
+  const sheet = getPermissionRequestsSheet();
+
+  if (!sheet || sheet.getLastRow() < 2) {
+    return null;
+  }
+
+  const targetPhone = normalizePhone(phone);
+  const targetName = normalizeName(name);
+  const targetDate = getBangkokDateKey(dateKey);
+  const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, PERMISSION_REQUEST_HEADERS.length).getValues();
+
+  for (let i = values.length - 1; i >= 0; i--) {
+    const row = values[i];
+    const requestType = normalizePermissionRequestType(row[5]);
+
+    if (!isNoCheckPermissionType(requestType)) {
+      continue;
+    }
+
+    const approvalStatus = normalizeStatusText(row[9]);
+
+    if (!approvalStatus.includes('อนุมัติแล้ว')) {
+      continue;
+    }
+
+    const rowPhone = normalizePhone(row[3]);
+    const rowName = normalizeName(row[2]);
+    const startDate = getBangkokDateKey(row[6]);
+    const endDate = getBangkokDateKey(row[14] || row[6]);
+    const isSamePerson = targetPhone
+      ? rowPhone === targetPhone
+      : rowName === targetName;
+
+    if (isSamePerson && targetDate >= startDate && targetDate <= endDate) {
+      return {
+        rowNumber: i + 2,
+        requestType: requestType,
+        startDate: startDate,
+        endDate: endDate,
+        approvalStatus: String(row[9] || '')
+      };
+    }
+  }
+
+  return null;
+}
+
 function findLateCheckinRowForPermission(checkSheet, permissionRow) {
   if (!checkSheet || checkSheet.getLastRow() < 2 || !permissionRow) {
     return null;
@@ -3031,7 +3100,6 @@ function submitLatePermissionRequest(data) {
 
 function getPendingPermissionRequests() {
   initializeSheets();
-  runAutoApprovePendingLatePermissionsSafely();
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = getPermissionRequestsSheet();
@@ -3898,6 +3966,7 @@ function notifyLineLatePermissionRequest(data) {
 function notifyLinePermissionRequest(data) {
   data = data || {};
   const requestType = normalizePermissionRequestType(data.requestType || 'มาสาย') || 'มาสาย';
+  const headerColor = getLineRequestHeaderColor(requestType);
   let title = 'คำขอ';
   const lines = [];
 
@@ -3927,6 +3996,7 @@ function notifyLinePermissionRequest(data) {
 
   const message = buildLineCard(title, lines, {
     headerName: data.name || '-',
+    headerColor: headerColor,
     primaryLabel: data.evidenceUrl ? 'ดูหลักฐาน' : '',
     primaryUrl: data.evidenceUrl || ''
   });
@@ -3940,6 +4010,7 @@ function notifyLinePermissionApproval(data) {
   const statusCode = getPermissionApprovalStatusCode(data.approvalStatus);
   const approved = statusCode === 'approved' || statusCode === 'auto_approved';
   const title = statusCode === 'auto_approved' ? 'อนุมัติอัตโนมัติ' : (approved ? 'อนุมัติแล้ว' : 'ไม่อนุมัติ');
+  const headerColor = getLineApprovalHeaderColor(statusCode, requestType);
   const lines = [];
 
   if (isLeavePermissionType(requestType)) {
@@ -3964,6 +4035,7 @@ function notifyLinePermissionApproval(data) {
 
   const message = buildLineCard(title, lines, {
     headerName: data.name || '-',
+    headerColor: headerColor,
     primaryLabel: data.leavePdfUrl ? 'ดูใบลา PDF' : '',
     primaryUrl: data.leavePdfUrl || ''
   });
@@ -4007,7 +4079,13 @@ function getPermissionRequestPrefix(requestType) {
   return 'LR';
 }
 function sendLineMessage(message) {
-  if (!CHANNEL_ACCESS_TOKEN || !GROUP_ID) {
+  return sendLineMessageTo(GROUP_ID, message);
+}
+
+function sendLineMessageTo(targetId, message) {
+  const to = String(targetId || '').trim();
+
+  if (!CHANNEL_ACCESS_TOKEN || !to) {
     logLineError('LINE_CONFIG', 'ยังไม่ได้ตั้งค่า CHANNEL_ACCESS_TOKEN หรือ GROUP_ID');
     return {
       success: false,
@@ -4020,7 +4098,7 @@ function sendLineMessage(message) {
 
   const payload = {
 
-    to: GROUP_ID,
+    to: to,
 
     messages: [lineMessage]
   };
@@ -4035,16 +4113,24 @@ function sendLineMessage(message) {
       Authorization: 'Bearer ' + CHANNEL_ACCESS_TOKEN
     },
 
-    payload: JSON.stringify(payload)
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
   };
 
   try {
     const response = UrlFetchApp.fetch(url, options);
+    const statusCode = response.getResponseCode();
+    const responseBody = response.getContentText();
+
+    if (statusCode < 200 || statusCode >= 300) {
+      logLineError('SEND_LINE_HTTP_' + statusCode, responseBody);
+      throw new Error('LINE API ตอบกลับ HTTP ' + statusCode + ': ' + responseBody);
+    }
 
     return {
       success: true,
-      statusCode: response.getResponseCode(),
-      body: response.getContentText()
+      statusCode: statusCode,
+      body: responseBody
     };
 
   } catch (err) {
@@ -4053,7 +4139,7 @@ function sendLineMessage(message) {
     if (message && typeof message === 'object' && message.fallbackText) {
       try {
         const fallbackPayload = {
-          to: GROUP_ID,
+          to: to,
           messages: [
             {
               type: 'text',
@@ -4067,14 +4153,22 @@ function sendLineMessage(message) {
           headers: {
             Authorization: 'Bearer ' + CHANNEL_ACCESS_TOKEN
           },
-          payload: JSON.stringify(fallbackPayload)
+          payload: JSON.stringify(fallbackPayload),
+          muteHttpExceptions: true
         };
         const fallbackResponse = UrlFetchApp.fetch(url, fallbackOptions);
+        const fallbackStatusCode = fallbackResponse.getResponseCode();
+        const fallbackBody = fallbackResponse.getContentText();
+
+        if (fallbackStatusCode < 200 || fallbackStatusCode >= 300) {
+          logLineError('SEND_LINE_FALLBACK_HTTP_' + fallbackStatusCode, fallbackBody);
+          throw new Error('LINE fallback API ตอบกลับ HTTP ' + fallbackStatusCode + ': ' + fallbackBody);
+        }
 
         return {
           success: true,
-          statusCode: fallbackResponse.getResponseCode(),
-          body: fallbackResponse.getContentText(),
+          statusCode: fallbackStatusCode,
+          body: fallbackBody,
           fallback: true
         };
       } catch (fallbackErr) {
@@ -4082,6 +4176,57 @@ function sendLineMessage(message) {
       }
     }
 
+    return {
+      success: false,
+      message: err.toString()
+    };
+  }
+}
+
+function replyLineMessage(replyToken, message) {
+  const token = String(replyToken || '').trim();
+
+  if (!CHANNEL_ACCESS_TOKEN || !token) {
+    logLineError('LINE_REPLY_CONFIG', 'ไม่มี CHANNEL_ACCESS_TOKEN หรือ replyToken');
+    return {
+      success: false,
+      message: 'ยังไม่ได้ตั้งค่า LINE reply'
+    };
+  }
+
+  const url = 'https://api.line.me/v2/bot/message/reply';
+  const lineMessage = buildLineMessagePayload(message);
+  const payload = {
+    replyToken: token,
+    messages: [lineMessage]
+  };
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      Authorization: 'Bearer ' + CHANNEL_ACCESS_TOKEN
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const statusCode = response.getResponseCode();
+    const responseBody = response.getContentText();
+
+    if (statusCode < 200 || statusCode >= 300) {
+      logLineError('REPLY_LINE_HTTP_' + statusCode, responseBody);
+      throw new Error('LINE reply API ตอบกลับ HTTP ' + statusCode + ': ' + responseBody);
+    }
+
+    return {
+      success: true,
+      statusCode: statusCode,
+      body: responseBody
+    };
+  } catch (err) {
+    logLineError('REPLY_LINE', err.toString());
     return {
       success: false,
       message: err.toString()
@@ -4112,6 +4257,9 @@ function notifyLineCheckin(data) {
   const title = approvalText.includes('มาสายโดยไม่ได้ขอ')
     ? 'มาสายโดยไม่ได้ขอ'
     : (isLate ? 'มาสาย' : 'ลงเวลาแล้ว');
+  const headerColor = approvalText.includes('มาสายโดยไม่ได้ขอ')
+    ? '#DC2626'
+    : (isLate ? getLineRequestHeaderColor('มาสาย') : '#059669');
   const lines = [
     'เวลาเข้า: ' + formatLineTime(data.checkinTime),
     'สถานะ: ' + timeStatus
@@ -4126,7 +4274,8 @@ function notifyLineCheckin(data) {
   }
 
   const message = buildLineCard(title, lines, {
-    headerName: data.name || '-'
+    headerName: data.name || '-',
+    headerColor: headerColor
   });
 
   return sendLineMessage(message);
@@ -4137,6 +4286,7 @@ function notifyLineApproval(data) {
   const statusCode = getApprovalStatusCode(data.approvalStatus);
   const approved = statusCode === 'approved' || statusCode === 'auto_approved';
   const title = statusCode === 'auto_approved' ? 'อนุมัติมาสายอัตโนมัติ' : (approved ? 'อนุมัติมาสาย' : 'ไม่อนุมัติ');
+  const headerColor = getLineApprovalHeaderColor(statusCode, 'มาสาย');
   const lines = [
     'เวลาเข้า: ' + formatLineTime(data.checkinTime),
     'เหตุผล: ' + String(data.reason || '-'),
@@ -4148,7 +4298,8 @@ function notifyLineApproval(data) {
   }
 
   const message = buildLineCard(title, lines, {
-    headerName: data.name || '-'
+    headerName: data.name || '-',
+    headerColor: headerColor
   });
 
   return sendLineMessage(message);
@@ -4167,6 +4318,7 @@ function buildLineCard(title, lines, options) {
   const settings = getSettings();
   const schoolName = String(settings.SCHOOL_NAME || '\u0e23\u0e30\u0e1a\u0e1a\u0e25\u0e07\u0e40\u0e27\u0e25\u0e32\u0e1b\u0e0f\u0e34\u0e1a\u0e31\u0e15\u0e34\u0e07\u0e32\u0e19').trim();
   const headerName = String(options.headerName || schoolName).trim();
+  const headerColor = normalizeLineColor(options.headerColor, '#7f1d1d');
   const sentAt = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'dd/MM/yyyy HH:mm') + ' \u0e19.';
   const bodyContents = cleanLines.map((line, index) => buildFlexLineRow(line, index));
   bodyContents.push({
@@ -4189,7 +4341,7 @@ function buildLineCard(title, lines, options) {
       header: {
         type: 'box',
         layout: 'vertical',
-        backgroundColor: '#7f1d1d',
+        backgroundColor: headerColor,
         paddingAll: '10px',
         spacing: 'xs',
         contents: [
@@ -4244,6 +4396,11 @@ function buildLineCard(title, lines, options) {
 
 function buildFlexLineRow(line, index) {
   const text = String(line || '').trim();
+
+  if (isMorningSummarySectionTitle(text)) {
+    return buildMorningSummarySectionTitle(text);
+  }
+
   const colonIndex = text.indexOf(':');
   const label = colonIndex > 0 ? text.slice(0, colonIndex).trim() : '';
   const shouldSplit = colonIndex > 0 &&
@@ -4288,14 +4445,87 @@ function buildFlexLineRow(line, index) {
   };
 }
 
+function isMorningSummarySectionTitle(text) {
+  return [
+    'ภาพรวม',
+    'ลำดับการลงเวลา',
+    'ไม่ต้องลงเวลา',
+    'ยังไม่ลงเวลา'
+  ].indexOf(String(text || '').trim()) !== -1;
+}
+
+function buildMorningSummarySectionTitle(text) {
+  const styles = {
+    'ภาพรวม': { bg: '#fee2e2', color: '#7f1d1d' },
+    'ลำดับการลงเวลา': { bg: '#eff6ff', color: '#1d4ed8' },
+    'ไม่ต้องลงเวลา': { bg: '#f5f3ff', color: '#6d28d9' },
+    'ยังไม่ลงเวลา': { bg: '#fff7ed', color: '#c2410c' }
+  };
+  const style = styles[text] || { bg: '#f1f5f9', color: '#334155' };
+
+  return {
+    type: 'box',
+    layout: 'vertical',
+    margin: 'md',
+    spacing: 'xs',
+    contents: [
+      {
+        type: 'separator',
+        margin: 'sm',
+        color: '#e2e8f0'
+      },
+      {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: style.bg,
+        cornerRadius: 'md',
+        paddingAll: '7px',
+        contents: [
+          {
+            type: 'text',
+            text: text,
+            color: style.color,
+            size: 'xs',
+            weight: 'bold',
+            wrap: true
+          }
+        ]
+      }
+    ]
+  };
+}
+
 function buildFlexFooterButtons(options) {
   const buttons = [];
 
-  addFlexUriButton(buttons, options.primaryLabel, options.primaryUrl, '#f59e0b');
-  addFlexUriButton(buttons, options.secondaryLabel, options.secondaryUrl, '#7f1d1d');
+  addFlexUriButton(buttons, options.primaryLabel, options.primaryUrl, options.primaryColor || '#f59e0b');
+  addFlexUriButton(buttons, options.secondaryLabel, options.secondaryUrl, options.secondaryColor || '#7f1d1d');
   addFlexUriButton(buttons, options.evidenceLabel, options.evidenceUrl, '#334155');
 
   return buttons;
+}
+
+function getLineRequestHeaderColor(requestType) {
+  const text = normalizePermissionRequestType(requestType);
+
+  if (text === 'มาสาย') return '#F59E0B';
+  if (text === 'ลาป่วย') return '#7C3AED';
+  if (text === 'ลากิจ' || text === 'ลา') return '#DB2777';
+  if (text === 'ไปราชการ') return '#0284C7';
+
+  return '#7f1d1d';
+}
+
+function getLineApprovalHeaderColor(statusCode, requestType) {
+  if (statusCode === 'rejected') return '#DC2626';
+  if (statusCode === 'approved' || statusCode === 'auto_approved') return '#059669';
+
+  return getLineRequestHeaderColor(requestType);
+}
+
+function normalizeLineColor(value, fallback) {
+  const text = String(value || '').trim();
+  return /^#[0-9a-fA-F]{6}$/.test(text) ? text : fallback;
 }
 
 function addFlexUriButton(buttons, label, url, color) {
@@ -4411,28 +4641,191 @@ function sendDailySummary() {
 function sendMorningCheckinAlert() {
   initializeSheets();
 
-  const data = getDashboardData();
-  const settings = getSettings();
-  const startTime = formatLineTime(settings.START_TIME || DEFAULT_SETTINGS.START_TIME);
-  const absentText = data.absentNames && data.absentNames.length
-    ? data.absentNames.slice(0, 12).join(', ')
-    : 'ไม่มี';
-  const noCheckTextParts = [];
+  return sendLineMessage(buildMorningCheckinSummaryMessage());
+}
 
-  if (data.sickLeave) noCheckTextParts.push('ลาป่วย ' + data.sickLeave);
-  if (data.personalLeave) noCheckTextParts.push('ลากิจ ' + data.personalLeave);
-  if (data.officialDuty) noCheckTextParts.push('ไปราชการ ' + data.officialDuty);
+function buildMorningCheckinSummaryMessage() {
+  const data = getMorningCheckinSummaryData();
+  const lines = [
+    formatLineThaiDate(data.date),
+    'ภาพรวม',
+    'มาแล้ว: ' + data.checkedIn + '/' + data.totalActive + ' คน',
+    'ปกติ: ' + data.normal + ' | มาสาย: ' + data.late,
+    'ลา/ไปราชการ: ' + data.noCheckTotal + ' | ยังไม่ลงเวลา: ' + data.absent,
+    'ลำดับการลงเวลา',
+    ...formatNumberedSummaryLines(data.checkinRows, 12),
+    'ไม่ต้องลงเวลา',
+    ...formatBulletSummaryLines(data.noCheckRows, 10),
+    'ยังไม่ลงเวลา',
+    ...formatBulletSummaryLines(data.absentRows, 10)
+  ];
 
-  const message = buildLineCard('⏰ สรุปหลังเวลาเข้า', [
-    formatLineThaiDate(data.date) + ' | เวลาเข้า ' + startTime,
-    'ทั้งหมด ' + data.totalActive + ' | ลงเวลา ' + data.checkedIn,
-    'ปกติ ' + data.normal + ' | มาสาย ' + data.late,
-    noCheckTextParts.length ? noCheckTextParts.join(' | ') : 'ลา/ไปราชการ 0',
-    'ยังไม่ลงเวลา ' + data.absent,
-    'รายชื่อ: ' + absentText
-  ]);
+  const message = buildLineCard('⏰ สรุปหลังเวลาเข้า 08:15 น.', lines, {
+    headerColor: '#7f1d1d'
+  });
 
-  return sendLineMessage(message);
+  return message;
+}
+
+function getMorningCheckinSummaryData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const userSheet = ss.getSheetByName(USERS_SHEET);
+  const checkSheet = ss.getSheetByName(CHECKIN_SHEET);
+  const permissionSheet = getPermissionRequestsSheet();
+  const today = getBangkokDateKey(new Date());
+  const activeUsers = [];
+  const checkedMap = {};
+  const noCheckMap = {};
+  const latePermissionMap = {};
+  const noCheckRows = [];
+  const checkinRows = [];
+  let normal = 0;
+  let late = 0;
+
+  if (userSheet && userSheet.getLastRow() >= 2) {
+    const users = userSheet.getRange(2, 1, userSheet.getLastRow() - 1, 5).getValues();
+
+    users.forEach((row) => {
+      const name = String(row[0] || '').trim();
+      const phone = normalizePhone(row[1]);
+      const status = String(row[4] || 'active').trim().toLowerCase();
+
+      if (name && status !== 'inactive' && status !== 'disabled' && status !== 'ปิดใช้งาน') {
+        activeUsers.push({
+          name: name,
+          phone: phone,
+          key: buildPersonKey(phone, name)
+        });
+      }
+    });
+  }
+
+  if (permissionSheet && permissionSheet.getLastRow() >= 2) {
+    const permissions = permissionSheet.getRange(2, 1, permissionSheet.getLastRow() - 1, PERMISSION_REQUEST_HEADERS.length).getValues();
+
+    permissions.forEach((row) => {
+      const requestType = normalizePermissionRequestType(row[5]);
+      const requestDate = getBangkokDateKey(row[6]);
+
+      if (requestDate !== today) {
+        return;
+      }
+
+      const name = String(row[2] || '').trim();
+      const phone = normalizePhone(row[3]);
+      const key = buildPersonKey(phone, name);
+      const approvalStatus = normalizeStatusText(row[9]);
+
+      if (requestType === 'มาสาย' && key) {
+        latePermissionMap[key] = true;
+      }
+
+      if (isNoCheckPermissionType(requestType) && approvalStatus.includes('อนุมัติแล้ว') && key) {
+        noCheckMap[key] = true;
+        noCheckRows.push(shortDisplayName(name) + ' (' + requestType + ')');
+      }
+    });
+  }
+
+  if (checkSheet && checkSheet.getLastRow() >= 2) {
+    const values = checkSheet.getRange(2, 1, checkSheet.getLastRow() - 1, Math.max(checkSheet.getLastColumn(), 17)).getValues();
+
+    values.forEach((row) => {
+      const rowDate = getBangkokDateKey(row[0]);
+
+      if (rowDate !== today) {
+        return;
+      }
+
+      const name = String(row[1] || '').trim();
+      const phone = normalizePhone(row[2]);
+      const key = buildPersonKey(phone, name);
+      const checkinTime = formatTimeValue(row[7], '');
+      const timeStatus = normalizeStatusText(row[9]);
+      const isLate = timeStatus.includes('มาสาย');
+      let label = '';
+
+      if (key) {
+        checkedMap[key] = true;
+      }
+
+      if (timeStatus.includes('ปกติ')) {
+        normal++;
+      }
+
+      if (isLate) {
+        late++;
+        label = latePermissionMap[key] ? ' (ขออนุญาตมาสาย)' : ' (มาสาย)';
+      }
+
+      checkinRows.push({
+        time: checkinTime || '-',
+        minutes: timeToMinutes(checkinTime || '23:59'),
+        text: (checkinTime ? checkinTime + ' น. ' : '') + shortDisplayName(name) + label
+      });
+    });
+  }
+
+  checkinRows.sort((a, b) => a.minutes - b.minutes || String(a.text).localeCompare(String(b.text)));
+
+  const absentRows = activeUsers
+    .filter((user) => user.key && !checkedMap[user.key] && !noCheckMap[user.key])
+    .map((user) => shortDisplayName(user.name) + (latePermissionMap[user.key] ? ' (ขออนุญาตมาสาย)' : ''));
+
+  return {
+    date: today,
+    totalActive: activeUsers.length,
+    checkedIn: Object.keys(checkedMap).length,
+    normal: normal,
+    late: late,
+    noCheckTotal: Object.keys(noCheckMap).length,
+    absent: absentRows.length,
+    checkinRows: checkinRows.map((row) => row.text),
+    noCheckRows: noCheckRows,
+    absentRows: absentRows
+  };
+}
+
+function buildPersonKey(phone, name) {
+  return normalizePhone(phone) || normalizeName(name);
+}
+
+function shortDisplayName(name) {
+  const text = String(name || '-').trim().replace(/\s+/g, ' ');
+
+  if (!text || text === '-') {
+    return '-';
+  }
+
+  return text.split(' ')[0];
+}
+
+function formatNumberedSummaryLines(items, limit) {
+  const rows = (items || []).slice(0, limit).map((item, index) => (index + 1) + '. ' + item);
+
+  if (!rows.length) {
+    return ['ไม่มี'];
+  }
+
+  if (items.length > limit) {
+    rows.push('และอีก ' + (items.length - limit) + ' คน');
+  }
+
+  return rows;
+}
+
+function formatBulletSummaryLines(items, limit) {
+  const rows = (items || []).slice(0, limit).map((item) => '- ' + item);
+
+  if (!rows.length) {
+    return ['ไม่มี'];
+  }
+
+  if (items.length > limit) {
+    rows.push('และอีก ' + (items.length - limit) + ' คน');
+  }
+
+  return rows;
 }
 
 function sendTomorrowPermissionAlert() {
@@ -4988,7 +5381,6 @@ function padTimePart(value) {
 
 function getPendingLateRequests() {
   initializeSheets();
-  runAutoApprovePendingLatePermissionsSafely();
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(CHECKIN_SHEET);
